@@ -16,15 +16,17 @@ repository currently contains only licensing and design material:
   admin/dev tooling, and wire-protocol compatibility such as
   Postgres/MySQL/ODBC/JDBC).
 - `design/decisions/` — ADRs recording decisions as backlog items get
-  resolved (currently: scope, implementation platform).
+  resolved (currently: scope, implementation platform, supported OSes).
 
 Store AI-generated design docs under `design/`.
 
 Decided so far: Basalt is a single-node, client/server relational
 database engine, built as a solo learning/research project
 ([0001](design/decisions/0001-scope.md)), implemented in Rust
-([0002](design/decisions/0002-implementation-platform.md)). No code
-exists yet, so there are still no build/lint/test commands to document.
+([0002](design/decisions/0002-implementation-platform.md)), targeting
+Windows + Linux for both server and client tooling — no macOS for now
+([0003](design/decisions/0003-supported-os.md)). No code exists yet, so
+there are still no build/lint/test commands to document.
 When implementation begins, this file should be updated with the actual
 Cargo commands and the real crate/module architecture once code exists —
 do not invent these before they exist.

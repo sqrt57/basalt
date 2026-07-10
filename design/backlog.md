@@ -62,7 +62,13 @@ heavily in C#/.NET per other repos) push toward a managed-language core
 with careful attention to GC/pinning, or is a native core worth the
 investment?~~ Answered: Rust — see decision above.
 
-## 3. Supported Operating Systems
+## 3. Supported Operating Systems — DECIDED
+
+See [decisions/0003-supported-os.md](decisions/0003-supported-os.md).
+Server targets Windows + Linux; client tooling matches. macOS is
+explicitly out of scope for now (dev-workstation-only precedent in other
+DBs, real cloud-Mac CI cost, no concrete need yet). Original framing
+kept below for reference.
 
 - Windows only (matches org's primary platform, per Acumatica context)
 - Windows + Linux (typical server matrix)
