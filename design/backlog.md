@@ -79,7 +79,14 @@ kept below for reference.
 Platform choice interacts with storage layer decisions (file I/O, memory
 mapping, direct I/O availability, filesystem guarantees for durability).
 
-## 4. Implementation Architecture
+## 4. Implementation Architecture — DECIDED
+
+See [decisions/0004-implementation-architecture.md](decisions/0004-implementation-architecture.md).
+Basalt has two separate, purpose-built storage engines — a row store for
+relational tables and a GT.M/globals-style sparse associative array for
+hierarchical tables, both B+-tree-backed — sharing MVCC concurrency
+control and a single WAL, executed by a plain tree-walking interpreter.
+Original framing kept below for reference.
 
 Reference points to study and position against:
 
@@ -111,7 +118,13 @@ the Postgres/SQLite/SQL Server family (native relational storage). Worth
 deciding early whether Basalt's core primitive is relational tuples or a
 more primitive associative structure that relational is built on top of.
 
-## 5. SQL Support
+## 5. SQL Support — DECIDED
+
+See [decisions/0005-sql-support.md](decisions/0005-sql-support.md).
+Basalt starts with a simple SQL subset, targeting Postgres-dialect
+compatibility as the distant goal, with a PL/pgSQL-like procedural
+language as a later addition and snapshot isolation as the initial (and
+only) isolation level. Original framing kept below for reference.
 
 - **Level**: no SQL (pure KV/document API), SQL-92 subset, broad
   ANSI SQL with common extensions, or full Postgres-dialect compatibility.
