@@ -35,7 +35,13 @@ special-purpose engine (e.g. optimized for a particular data model), or a
 general-purpose competitor to existing engines?~~ Answered: learning/
 research project — see decision above.
 
-## 2. Implementation Platform
+## 2. Implementation Platform — DECIDED
+
+See [decisions/0002-implementation-platform.md](decisions/0002-implementation-platform.md).
+Basalt's core will be built in Rust — chosen for native-level control
+without a GC, and because learning systems programming (not just DB
+internals) is part of the project's goal. Original framing kept below
+for reference.
 
 Language/runtime for the core engine.
 
@@ -51,10 +57,10 @@ Language/runtime for the core engine.
 - **Mixed** — safety-critical storage core in one language, tooling/
   clients in another.
 
-**Open question:** does the team's existing expertise (the org works
+~~**Open question:** does the team's existing expertise (the org works
 heavily in C#/.NET per other repos) push toward a managed-language core
 with careful attention to GC/pinning, or is a native core worth the
-investment?
+investment?~~ Answered: Rust — see decision above.
 
 ## 3. Supported Operating Systems
 
