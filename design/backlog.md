@@ -6,7 +6,13 @@ Each item frames the question, the options on the table, and relevant
 precedent from existing systems. Nothing here is decided yet — this is the
 starting point for discussion.
 
-## 1. Scope
+## 1. Scope — DECIDED
+
+See [decisions/0001-scope.md](decisions/0001-scope.md). Basalt is a
+single-node, client/server relational database engine, built as a solo
+learning/research project. Distributed/clustered operation, embedded/
+in-process linking, and heavy enterprise tooling are explicitly out of
+scope for now. Original framing kept below for reference.
 
 What kind of database is Basalt?
 
@@ -24,9 +30,10 @@ What kind of database is Basalt?
 This choice drives almost everything else (platform, architecture,
 interfaces). Needs to be settled first.
 
-**Open question:** is the goal a learning/research project, a niche
+~~**Open question:** is the goal a learning/research project, a niche
 special-purpose engine (e.g. optimized for a particular data model), or a
-general-purpose competitor to existing engines?
+general-purpose competitor to existing engines?~~ Answered: learning/
+research project — see decision above.
 
 ## 2. Implementation Platform
 
