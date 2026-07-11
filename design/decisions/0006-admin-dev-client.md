@@ -49,11 +49,11 @@ client, result-set model) underneath:
   a separate process. Frontend framework/stack not yet chosen — that's
   a Tauri-GUI implementation detail to settle when GUI work starts.
 - **TUI: ratatui**, with **crossterm** as the terminal backend.
-- **CLI REPL**: line-editing crate **not yet decided** — open between
-  **rustyline** (simpler, battle-tested; used by `datafusion-cli`, a
-  close Rust-SQL-CLI precedent) and **reedline** (newer, more capable —
-  syntax highlighting, multiline editing, richer completion; built for
-  and used by `nushell`). Revisit when CLI work starts.
+- **CLI REPL: reedline** for line editing — chosen over rustyline for
+  its richer feature set (syntax highlighting, multiline editing, more
+  capable completion/hinting), matching the room-to-grow a SQL prompt
+  benefits from (e.g. highlighting SQL as it's typed). Same crate
+  `nushell` is built on.
 - Likely supporting crates, not yet firmly confirmed: **clap** for the
   scriptable/non-interactive execution mode's flag parsing, and a table
   crate (**comfy-table** or **tabled**) for rendering query results.
