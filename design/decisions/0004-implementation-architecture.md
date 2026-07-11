@@ -112,10 +112,3 @@ here.
   interface so the tree-walking executor can drive either engine without
   engine-specific executor code.
 
-## Follow-on
-
-Item 4 is now fully decided. Remaining open backlog items: SQL support
-level (5), admin client (6), dev client (7), and Postgres wire protocol
-compatibility (8) — item 5's procedural-extensions question is where
-"reuse an existing language runtime" (considered and set aside for the
-core executor above) may still be worth revisiting.

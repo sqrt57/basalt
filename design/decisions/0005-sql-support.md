@@ -21,7 +21,7 @@ Status: Decided (2026-07-10)
 ## Context
 
 Per [backlog.md item 5](../backlog.md#5-sql-support), this item is
-tightly coupled to item 8 (Postgres wire protocol) — if Basalt wants to
+tightly coupled to item 7 (Postgres wire protocol) — if Basalt wants to
 reuse Postgres client tooling eventually, the dialect should track
 Postgres semantics closely enough that common queries "just work." That
 coupling is why Postgres was chosen as the dialect target even though the
@@ -49,17 +49,10 @@ you by default, over Postgres's actual default of read committed.
   incrementally rather than attempting broad ANSI SQL coverage upfront.
 - Syntax/semantics decisions for the initial subset should default to
   "what would Postgres do here" to avoid dialect drift that would need
-  to be unwound later for item 8.
+  to be unwound later for item 7.
 - No procedural SQL (stored procedures/functions) in the initial scope —
   revisit once the core executor and SQL subset are stable.
 - Only snapshot isolation needs to be exposed and tested initially — read
   committed, repeatable read, and serializable are deferred, not ruled
   out.
 
-## Follow-on
-
-Remaining open backlog items: admin client (6), dev client (7), and
-Postgres wire protocol compatibility (8) — item 8 is now the natural next
-step given item 5's dialect target, per the backlog's suggested
-sequencing (get a bare-bones Postgres wire protocol handshake working
-early).

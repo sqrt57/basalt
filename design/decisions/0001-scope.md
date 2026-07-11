@@ -47,9 +47,3 @@ Three inputs drove this:
   in their spare time," not against "what would a commercial engine
   need."
 
-## Follow-on
-
-This unblocks backlog item 2 (implementation platform) and item 4
-(architecture) — both should now be chosen with "single developer,
-learning goal, single-node server, no embedding requirement" as the
-constraint, not the enterprise/embedded options that scope ruled out.

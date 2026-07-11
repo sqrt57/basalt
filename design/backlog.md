@@ -65,10 +65,13 @@ investment?~~ Answered: Rust — see decision above.
 ## 3. Supported Operating Systems — DECIDED
 
 See [decisions/0003-supported-os.md](decisions/0003-supported-os.md).
-Server targets Windows + Linux; client tooling matches. macOS is
-explicitly out of scope for now (dev-workstation-only precedent in other
-DBs, real cloud-Mac CI cost, no concrete need yet). Original framing
-kept below for reference.
+Server OS support is staged by priority: Windows day one, Linux next,
+FreeBSD much later (for ZFS). Other BSDs (DragonflyBSD, OpenBSD,
+NetBSD), illumos, and macOS are "maybe sometime" — not committed, no CI
+investment yet. Client tooling splits by interface form: CLI REPL and
+TUI strive to match the server's platform list exactly; GUI is required
+only on Windows + Linux, with other platforms best-effort. Original
+framing kept below for reference.
 
 - Windows only (matches org's primary platform, per Acumatica context)
 - Windows + Linux (typical server matrix)
@@ -139,27 +142,44 @@ This is tightly coupled to item 7 (Postgres wire protocol) — if Basalt
 wants to reuse Postgres client tooling, the SQL dialect should track
 Postgres semantics closely enough that common queries "just work."
 
-## 6. Administration Client (GUI/TUI)
+## 6. Administration + Development Client — DECIDED (merges former items 6 and 7)
+
+See [decisions/0006-admin-dev-client.md](decisions/0006-admin-dev-client.md).
+What were originally two separate backlog items (administration client,
+development client) are merged into a single unified admin/dev client,
+shipped as four interface forms sharing one core — CLI REPL
+(sqlcmd-style, built first), TUI, GUI (Tauri), and a Web console bundled
+into the server (built alongside/after GUI, reusing its frontend).
+Original framing kept below for reference (both items' text, since they
+were merged).
+
+**Original item 6 — Administration Client (GUI/TUI):**
 
 - Do we build one at all initially, or rely on third-party tools via a
-  compatible wire protocol (see item 8)?
+  compatible wire protocol (see item 7)?
 - If built: GUI (cross-platform, e.g. Avalonia/Electron/web-based) vs.
   TUI (terminal, e.g. a `psql`-like REPL) vs. both, starting with TUI.
 - Scope: connection/server management, user/role management, backup/
   restore, monitoring, query console.
 
-## 7. Development Client (GUI/TUI)
+**Original item 7 — Development Client (GUI/TUI):**
 
 - Query editor / REPL, schema browser, result grid, explain-plan
   visualization.
-- Overlap with item 6 — many DBs ship one tool that covers both admin
-  and dev use cases (e.g. Azure Data Studio, DBeaver, pgAdmin) rather than
-  two separate tools. Decide whether Basalt follows suit or keeps them
-  split.
+- Overlap with the admin client above — many DBs ship one tool that
+  covers both admin and dev use cases (e.g. Azure Data Studio, DBeaver,
+  pgAdmin) rather than two separate tools. Decide whether Basalt follows
+  suit or keeps them split.
 - Build vs. rely on generic third-party SQL clients (DBeaver, DataGrip)
   via a standard wire protocol — likely the pragmatic starting point.
 
-## 8. Postgres Wire Protocol Compatibility
+## 7. Postgres Wire Protocol Compatibility — DECIDED (native protocol first, formerly item 8)
+
+See [decisions/0007-wire-protocol.md](decisions/0007-wire-protocol.md).
+Basalt builds its own native wire protocol first (spoken by the CLI
+REPL from item 6); Postgres wire-protocol compatibility is deferred to
+a later phase as a separate interop layer. Original framing kept below
+for reference.
 
 Goal: implement enough of the Postgres frontend/backend protocol (and
 enough SQL semantics) that existing Postgres clients and GUIs work
@@ -201,9 +221,13 @@ against Basalt with no modification.
    on these.
 2. Prototype the storage/architecture core (item 4) against a minimal
    subset of SQL (item 5) before building any client.
-3. Get a bare-bones Postgres wire protocol handshake + simple query
-   working early (item 8) — it's the cheapest way to get `psql` and a
-   GUI client talking to Basalt for testing, ahead of building bespoke
-   tooling (items 6–7).
-4. Layer admin/dev tooling on top once the wire protocol and core SQL
-   surface are stable enough to be worth building a UI against.
+3. Build Basalt's own native wire protocol (item 7) plus the CLI REPL
+   (item 6) against it — this is the first client, ahead of Postgres
+   compatibility.
+4. Add Postgres wire-protocol compatibility (item 7) later, once the
+   native protocol and core SQL surface are stable, to unlock `psql` and
+   third-party GUI clients.
+5. Layer the TUI and GUI interface forms (item 6) on top once the
+   client core and protocol are stable enough to be worth building
+   additional interfaces against, with the Web console following
+   alongside/after GUI since it reuses GUI's frontend.

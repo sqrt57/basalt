@@ -43,9 +43,3 @@ Two inputs settled this:
   end-to-end (server, and likely CLI tooling) unless a specific piece
   (e.g. a GUI client) later makes a strong case for another language.
 
-## Follow-on
-
-Unblocks backlog item 3 (supported OSes — Rust's cross-platform story is
-strong, so this is now mostly a "which platforms will you actually test
-on" question) and keeps item 4 (architecture) open on every axis except
-language.
