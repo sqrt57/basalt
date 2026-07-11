@@ -51,9 +51,10 @@ or compiled plans). ([0004](decisions/0004-implementation-architecture.md))
 Starts with a simple SQL subset (basic DDL/DML: `CREATE TABLE`,
 `SELECT`/`INSERT`/`UPDATE`/`DELETE`, straightforward `WHERE`/`JOIN`),
 targeting Postgres-dialect compatibility as the distant goal. A
-PL/pgSQL-like procedural language is a later addition. Snapshot
-isolation is the initial (and only) isolation level.
-([0005](decisions/0005-sql-support.md))
+PL/pgSQL-like procedural language is a later addition. Isolation level
+is a per-database server setting (not per-transaction), supporting the
+usual five: Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
+Serializable. ([0005](decisions/0005-sql-support.md))
 
 ## Client Tooling
 
@@ -75,10 +76,13 @@ as four interface forms sharing one Rust core library crate:
 
 ## Wire Protocol
 
-Basalt speaks its **own native wire protocol** first — this is what the
-CLI REPL speaks. Postgres wire-protocol compatibility is deferred to a
-later phase, added afterward as a separate interop layer for
-third-party tooling (`psql`, pgAdmin, DBeaver, ORMs/drivers).
+Basalt speaks its **own native wire protocol** — this is the committed
+target for client connectivity, and what the CLI REPL speaks. Postgres
+wire-protocol compatibility is an optional possibility, not a committed
+direction; it isn't assumed to happen, and standardized ODBC/JDBC/
+ADO.NET provider access isn't assumed to arrive "for free" through it
+either. Native client libraries are committed for Rust, C, and .NET
+initially, Rust first (other languages later, unscheduled).
 ([0007](decisions/0007-wire-protocol.md))
 
 See [roadmap.md](roadmap.md) for build order/sequencing derived from

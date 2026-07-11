@@ -99,6 +99,13 @@ here.
 - MVCC requires multi-version storage and eventual version reclamation
   (a Postgres-`VACUUM`-like mechanism) in both engines — accepted as the
   cost of readers/writers never blocking each other.
+- The shared visibility mechanism must support multiple exposed isolation
+  levels, not just one — [0005](0005-sql-support.md) commits to all five
+  usual levels (Read Uncommitted, Read Committed, Repeatable Read,
+  Snapshot, Serializable), configurable as a per-database server setting.
+  Read Committed and Repeatable Read need their own visibility rules
+  distinct from snapshot isolation's, and true Serializable needs
+  conflict detection beyond what snapshot visibility alone provides.
 - A single shared WAL means transaction atomicity across both engines
   comes for free, but couples their recovery paths together — a
   corruption/bug in one engine's log records affects crash recovery for

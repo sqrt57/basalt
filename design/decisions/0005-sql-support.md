@@ -16,7 +16,10 @@ Status: Decided (2026-07-10)
 - **Procedural extensions**: distant goal is a **PL/pgSQL-like language**,
   consistent with the Postgres target. Starts minimal/none and grows
   alongside the SQL subset itself, on the same phased trajectory.
-- **Isolation levels**: start with **snapshot isolation** only.
+- **Isolation levels**: **configurable as a per-database server
+  setting** (not per-transaction/per-session), supporting the usual
+  five — **Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
+  Serializable** — rather than exposing only one.
 
 ## Context
 
@@ -36,12 +39,21 @@ an existing embedded language runtime (e.g. WASM via Wasmtime) was
 raised as a possible implementation path for procedural extensions during
 the item 4 discussion and remains open for when this is picked up.
 
-Isolation levels: [0004](0004-implementation-architecture.md) already
-committed to shared MVCC as the concurrency mechanism across both
-storage engines. Of the levels MVCC naturally supports, snapshot
-isolation was chosen over read committed as the starting (and initially
-only) level — stronger guarantees, and a closer match to what MVCC gives
-you by default, over Postgres's actual default of read committed.
+Isolation levels: this reverses the earlier snapshot-isolation-only
+decision. [0004](0004-implementation-architecture.md) already committed
+to shared MVCC as the concurrency mechanism across both storage engines;
+that choice doesn't force a single exposed isolation level, and
+Postgres itself proves the pattern of offering several levels (Read
+Committed, Repeatable Read, Serializable) over one MVCC substrate.
+Restricting Basalt to snapshot isolation only would have been a
+narrower guarantee surface than what users reasonably expect to be able
+to choose. Unlike Postgres's per-transaction/per-session
+`SET TRANSACTION ISOLATION LEVEL`, Basalt fixes the isolation level as a
+per-database server setting — one level applies to all transactions
+against a given database, not chosen per transaction. This is a
+deliberate simplification, not a dialect-compatibility concern; it
+narrows what the transaction layer needs to track (no per-transaction
+level state) at the cost of per-transaction flexibility Postgres offers.
 
 ## Consequences
 
@@ -52,7 +64,21 @@ you by default, over Postgres's actual default of read committed.
   to be unwound later for item 7.
 - No procedural SQL (stored procedures/functions) in the initial scope —
   revisit once the core executor and SQL subset are stable.
-- Only snapshot isolation needs to be exposed and tested initially — read
-  committed, repeatable read, and serializable are deferred, not ruled
-  out.
+- All five isolation levels (Read Uncommitted, Read Committed, Repeatable
+  Read, Snapshot, Serializable) need to be exposed and tested from the
+  start, not just one — more surface area for the transaction layer than
+  a single fixed level. Since it's a per-database setting rather than
+  per-transaction, there's no need for transaction-scoped isolation-level
+  state or `SET TRANSACTION ISOLATION LEVEL`-style syntax, but changing
+  a database's level is an administrative operation, not something a
+  client can do mid-session.
+- True Serializable is a stronger guarantee than snapshot isolation
+  alone provides; how it's actually implemented on top of the shared
+  MVCC substrate (e.g. Postgres-style SSI/predicate-conflict detection
+  vs. locking) is not resolved by this ADR — see
+  [backlog.md](../backlog.md).
+- Read Uncommitted is a weaker guarantee than plain MVCC snapshot reads
+  naturally give; how dirty reads are actually surfaced under a
+  versioned storage model is also not resolved here — see
+  [backlog.md](../backlog.md).
 

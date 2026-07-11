@@ -27,19 +27,37 @@ raised and set aside without a commitment either way.
   table-rendering crate (`comfy-table` vs. `tabled`) are likely
   defaults, not firmly confirmed
   ([0006](decisions/0006-admin-dev-client.md)).
+- **Serializable isolation implementation strategy** — the shared MVCC
+  substrate ([0004](decisions/0004-implementation-architecture.md))
+  gives snapshot-style visibility naturally; true Serializable needs
+  additional conflict detection on top (e.g. Postgres-style SSI/
+  predicate locking vs. an alternative). Not decided
+  ([0005](decisions/0005-sql-support.md)).
+- **Read Uncommitted implementation strategy** — how dirty reads are
+  actually surfaced under a versioned (MVCC) storage model, where reads
+  normally see a consistent snapshot rather than in-flight writes. Not
+  decided ([0005](decisions/0005-sql-support.md)).
 
 ## Deferred, Not Yet Scheduled
 
 Raised as possibilities but with no committed timeline — not ruled out,
 just not planned:
 
-- **Postgres wire-protocol compatibility** — still the decided eventual
-  direction ([0007](decisions/0007-wire-protocol.md): native protocol
-  first, Postgres compatibility later), but pulled out of the active
-  build order ([roadmap.md](roadmap.md)) — no committed timeline for
-  starting it.
+- **Postgres wire-protocol compatibility** — an optional possibility,
+  not a committed direction ([0007](decisions/0007-wire-protocol.md):
+  native protocol is the actual target; Postgres compatibility may be
+  revisited later but isn't assumed).
 - MySQL wire protocol.
-- ODBC / JDBC drivers.
+- Standardized ODBC / JDBC / ADO.NET *provider* layers (e.g. a
+  `DbConnection`-based ADO.NET provider, not just a plain native .NET
+  client library) — no longer assumed to arrive "for free" via Postgres
+  compatibility, since that's now optional rather than committed
+  ([0007](decisions/0007-wire-protocol.md)). Distinct from the native
+  Rust/C/.NET client libraries already committed to in
+  [0007](decisions/0007-wire-protocol.md).
+- Native client libraries for languages beyond the initial Rust/C/.NET
+  set (Python, Node, Go, Java, etc.) — unscheduled
+  ([0007](decisions/0007-wire-protocol.md)).
 - A general REST/HTTP + JSON data API (distinct from the narrow HTTP
   endpoint that serves the bundled web console — see
   [0006](decisions/0006-admin-dev-client.md) /

@@ -10,4 +10,4 @@ for implementation questions these ADRs left open.
 - [0004 — Implementation Architecture](0004-implementation-architecture.md)
 - [0005 — SQL Support](0005-sql-support.md)
 - [0006 — Admin/Dev Client](0006-admin-dev-client.md)
-- [0007 — Wire Protocol: Native First, Postgres Compatibility Later](0007-wire-protocol.md)
+- [0007 — Wire Protocol: Native Is the Target, Postgres Compatibility Optional](0007-wire-protocol.md)
