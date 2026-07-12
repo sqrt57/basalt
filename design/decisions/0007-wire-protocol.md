@@ -1,22 +1,6 @@
 # ADR 0007: Wire Protocol — Native Is the Target, Postgres Compatibility Optional
 
-Status: Decided (2026-07-11)
-
-## Decision
-
-Basalt implements its **own native wire protocol** as the primary
-protocol — this is what the CLI REPL ([0006](0006-admin-dev-client.md))
-speaks, and it is the committed target for client connectivity, not just
-a first phase. **Postgres wire-protocol compatibility** (backlog item 7,
-formerly item 8 before items 6/7 were merged) is an **optional,
-uncommitted possibility** — it may be built later as a separate interop
-layer for third-party tooling (`psql`, pgAdmin, DBeaver, ORMs/drivers
-such as npgsql/psycopg/JDBC) if there's a leverage case for it at the
-time, but Basalt's design does not assume it will happen.
-
-**Native client libraries**: initial language coverage is **Rust, .NET,
-and C**, with **Rust as top priority**. Other languages are later,
-unscheduled work.
+Status: Proposed (2026-07-11)
 
 ## Context
 
@@ -53,6 +37,22 @@ can wrap, the way `libpq` anchors much of the Postgres client ecosystem.
 of the enterprise/Windows-adjacent audience implied by Windows being the
 first supported server OS ([0003](0003-supported-os.md)). Other
 languages (Python, Node, Go, Java, etc.) are left for later,
+unscheduled work.
+
+## Decision
+
+Basalt implements its **own native wire protocol** as the primary
+protocol — this is what the CLI REPL ([0006](0006-admin-dev-client.md))
+speaks, and it is the committed target for client connectivity, not just
+a first phase. **Postgres wire-protocol compatibility** (backlog item 7,
+formerly item 8 before items 6/7 were merged) is an **optional,
+uncommitted possibility** — it may be built later as a separate interop
+layer for third-party tooling (`psql`, pgAdmin, DBeaver, ORMs/drivers
+such as npgsql/psycopg/JDBC) if there's a leverage case for it at the
+time, but Basalt's design does not assume it will happen.
+
+**Native client libraries**: initial language coverage is **Rust, .NET,
+and C**, with **Rust as top priority**. Other languages are later,
 unscheduled work.
 
 ## Consequences

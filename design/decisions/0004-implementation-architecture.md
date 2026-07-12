@@ -1,36 +1,6 @@
 # ADR 0004: Implementation Architecture
 
-Status: Decided (2026-07-10)
-
-## Decision
-
-Basalt has **two separate, purpose-built storage engines** rather than a
-single universal storage primitive or an arbitrary-plugin architecture:
-
-- **Relational tables**: a row store — tuples stored together, tuple-per-
-  page layout — matching the Postgres/MySQL/SQL Server family.
-- **Hierarchical tables**: a sparse hierarchical/associative array, in the
-  style of GT.M/YottaDB "globals," with its own multidimensional-subscript
-  API distinct from the relational one — rather than SQL being the only
-  entry point to it (unlike IRIS, which builds SQL as the sole layer on
-  top of globals).
-
-Both engines are physically backed by **B+-trees**.
-
-Across both engines:
-
-- **Concurrency control**: shared **MVCC** — one versioning/visibility
-  mechanism (transaction-ID stamping, snapshot-based visibility checks)
-  reused by both engines, even though their physical page layouts differ.
-- **Durability**: a single shared **write-ahead log (WAL)** — one log
-  stream, one crash-recovery pass, one durability boundary, regardless of
-  whether a transaction touches the relational engine, the hierarchical
-  engine, or both. No cross-engine two-phase commit between independent
-  logs.
-- **Query execution**: a simple **tree-walking interpreter** (Volcano/
-  iterator model) — the query plan is a tree of operator nodes, executed
-  by recursively pulling rows from the root down to leaf scans. No
-  bytecode VM, no JIT/compiled query plans.
+Status: Proposed (2026-07-10)
 
 ## Context
 
@@ -86,6 +56,36 @@ plausible fit for procedural extensions/stored procedures (backlog item
 5), which is a separate, lower-frequency execution path — not decided
 here.
 
+## Decision
+
+Basalt has **two separate, purpose-built storage engines** rather than a
+single universal storage primitive or an arbitrary-plugin architecture:
+
+- **Relational tables**: a row store — tuples stored together, tuple-per-
+  page layout — matching the Postgres/MySQL/SQL Server family.
+- **Hierarchical tables**: a sparse hierarchical/associative array, in the
+  style of GT.M/YottaDB "globals," with its own multidimensional-subscript
+  API distinct from the relational one — rather than SQL being the only
+  entry point to it (unlike IRIS, which builds SQL as the sole layer on
+  top of globals).
+
+Both engines are physically backed by **B+-trees**.
+
+Across both engines:
+
+- **Concurrency control**: shared **MVCC** — one versioning/visibility
+  mechanism (transaction-ID stamping, snapshot-based visibility checks)
+  reused by both engines, even though their physical page layouts differ.
+- **Durability**: a single shared **write-ahead log (WAL)** — one log
+  stream, one crash-recovery pass, one durability boundary, regardless of
+  whether a transaction touches the relational engine, the hierarchical
+  engine, or both. No cross-engine two-phase commit between independent
+  logs.
+- **Query execution**: a simple **tree-walking interpreter** (Volcano/
+  iterator model) — the query plan is a tree of operator nodes, executed
+  by recursively pulling rows from the root down to leaf scans. No
+  bytecode VM, no JIT/compiled query plans.
+
 ## Consequences
 
 - Two storage engines to design, build, and maintain — more surface area
@@ -118,4 +118,3 @@ here.
 - Both engines' scan/seek operators need to expose a common iterator
   interface so the tree-walking executor can drive either engine without
   engine-specific executor code.
-

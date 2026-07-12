@@ -1,25 +1,6 @@
 # ADR 0005: SQL Support
 
-Status: Decided (2026-07-10)
-
-## Decision
-
-- **Level**: start with a **simple SQL subset** — basic DDL/DML
-  (`CREATE TABLE`, `SELECT`/`INSERT`/`UPDATE`/`DELETE`, straightforward
-  `WHERE`/`JOIN`), growing over time. No exotic or Postgres-only features
-  in the initial subset.
-- **Dialect compatibility target**: **Postgres-compatible**, as a distant
-  goal — even the initial subset should track Postgres syntax/semantics
-  rather than inventing divergent syntax, since retrofitting Postgres
-  compatibility onto an already-diverged dialect is harder than growing
-  toward it from day one.
-- **Procedural extensions**: distant goal is a **PL/pgSQL-like language**,
-  consistent with the Postgres target. Starts minimal/none and grows
-  alongside the SQL subset itself, on the same phased trajectory.
-- **Isolation levels**: **configurable as a per-database server
-  setting** (not per-transaction/per-session), supporting the usual
-  five — **Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
-  Serializable** — rather than exposing only one.
+Status: Proposed (2026-07-10)
 
 ## Context
 
@@ -55,6 +36,25 @@ deliberate simplification, not a dialect-compatibility concern; it
 narrows what the transaction layer needs to track (no per-transaction
 level state) at the cost of per-transaction flexibility Postgres offers.
 
+## Decision
+
+- **Level**: start with a **simple SQL subset** — basic DDL/DML
+  (`CREATE TABLE`, `SELECT`/`INSERT`/`UPDATE`/`DELETE`, straightforward
+  `WHERE`/`JOIN`), growing over time. No exotic or Postgres-only features
+  in the initial subset.
+- **Dialect compatibility target**: **Postgres-compatible**, as a distant
+  goal — even the initial subset should track Postgres syntax/semantics
+  rather than inventing divergent syntax, since retrofitting Postgres
+  compatibility onto an already-diverged dialect is harder than growing
+  toward it from day one.
+- **Procedural extensions**: distant goal is a **PL/pgSQL-like language**,
+  consistent with the Postgres target. Starts minimal/none and grows
+  alongside the SQL subset itself, on the same phased trajectory.
+- **Isolation levels**: **configurable as a per-database server
+  setting** (not per-transaction/per-session), supporting the usual
+  five — **Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
+  Serializable** — rather than exposing only one.
+
 ## Consequences
 
 - Early query surface will be deliberately narrow; features get added
@@ -81,4 +81,3 @@ level state) at the cost of per-transaction flexibility Postgres offers.
   naturally give; how dirty reads are actually surfaced under a
   versioned storage model is also not resolved here — see
   [backlog.md](../backlog.md).
-

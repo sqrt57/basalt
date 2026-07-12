@@ -1,6 +1,29 @@
 # ADR 0006: Admin/Dev Client
 
-Status: Decided (2026-07-11)
+Status: Proposed (2026-07-11)
+
+## Context
+
+Precedent for combining admin and dev tooling into one client rather
+than splitting them: Azure Data Studio, DBeaver, and pgAdmin all cover
+both use cases in a single tool, rather than shipping two separate
+products. Basalt follows that pattern instead of the split originally
+posed in the backlog.
+
+The CLI-first build order follows the backlog's suggested sequencing
+(get a client talking to the server early, ahead of GUI/TUI work) and
+the sqlcmd (MS SQL Server) precedent for what that CLI should feel
+like: a REPL for interactive use, but also scriptable for automation.
+
+This decision is entangled with [0007](0007-wire-protocol.md): the CLI
+REPL is the first client to speak Basalt's own native wire protocol.
+
+The web interface follows the "database ships its own web console"
+precedent (CockroachDB, RethinkDB) rather than the "separate web app
+talking to the API" precedent (pgAdmin, Supabase Studio) — chosen
+because bundling means zero extra deployment/process for a solo-project
+server, and because the frontend code is expected to already exist from
+the Tauri GUI.
 
 ## Decision
 
@@ -57,29 +80,6 @@ client, result-set model) underneath:
 - Likely supporting crates, not yet firmly confirmed: **clap** for the
   scriptable/non-interactive execution mode's flag parsing, and a table
   crate (**comfy-table** or **tabled**) for rendering query results.
-
-## Context
-
-Precedent for combining admin and dev tooling into one client rather
-than splitting them: Azure Data Studio, DBeaver, and pgAdmin all cover
-both use cases in a single tool, rather than shipping two separate
-products. Basalt follows that pattern instead of the split originally
-posed in the backlog.
-
-The CLI-first build order follows the backlog's suggested sequencing
-(get a client talking to the server early, ahead of GUI/TUI work) and
-the sqlcmd (MS SQL Server) precedent for what that CLI should feel
-like: a REPL for interactive use, but also scriptable for automation.
-
-This decision is entangled with [0007](0007-wire-protocol.md): the CLI
-REPL is the first client to speak Basalt's own native wire protocol.
-
-The web interface follows the "database ships its own web console"
-precedent (CockroachDB, RethinkDB) rather than the "separate web app
-talking to the API" precedent (pgAdmin, Supabase Studio) — chosen
-because bundling means zero extra deployment/process for a solo-project
-server, and because the frontend code is expected to already exist from
-the Tauri GUI.
 
 ## Consequences
 

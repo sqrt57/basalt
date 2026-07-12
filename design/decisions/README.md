@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-All decided. See [../architecture.md](../architecture.md) for a
+All proposed. See [../architecture.md](../architecture.md) for a
 synthesized current-state summary, and [../backlog.md](../backlog.md)
 for implementation questions these ADRs left open.
 

@@ -1,36 +1,6 @@
 # ADR 0003: Supported Operating Systems
 
-Status: Decided (2026-07-10), revised (2026-07-11)
-
-## Decision
-
-**Server** OS support is staged by priority rather than a flat list:
-
-1. **Windows — day one.** Primary development and first-supported
-   platform.
-2. **Linux — next.** Added once Windows support is solid; still the
-   realistic production-deployment target for a client/server DB.
-3. **FreeBSD — much later.** Motivated specifically by ZFS.
-4. **Maybe/sometime, no concrete commitment:** other BSDs (DragonflyBSD,
-   OpenBSD, NetBSD), illumos (OmniOS/SmartOS — the original home of ZFS
-   and DTrace, which FreeBSD later ported), and macOS. None of these are
-   ruled out, but nothing beyond FreeBSD is currently planned for them;
-   they'd only get picked up if a concrete reason shows up.
-
-**Client tooling** ([0006](0006-admin-dev-client.md): CLI REPL, TUI,
-GUI) no longer tracks the server list uniformly — it now splits by
-interface form:
-
-- **CLI REPL and TUI strive to match the server's list exactly**,
-  platform for platform, at whatever stage the server reaches it:
-  Windows + Linux, then FreeBSD, then the maybe-sometime tier if the
-  server ever picks one of those up. These are lightweight enough
-  (no rendering toolkit) that there's little reason for them to lag
-  a platform the server already supports.
-- **GUI is required only on Windows + Linux.** Support for FreeBSD or
-  anything in the maybe-sometime tier is best-effort/if-possible, not a
-  commitment — GUI toolkit portability to less-common platforms can be
-  genuinely harder and isn't worth blocking on.
+Status: Proposed (2026-07-10), revised (2026-07-11)
 
 ## Context
 
@@ -79,6 +49,36 @@ Research into the options:
   platform the server supports, while GUI portability is a real,
   separate cost that shouldn't gate on niche server platforms — hence
   GUI's narrower Windows+Linux requirement with best-effort elsewhere.
+
+## Decision
+
+**Server** OS support is staged by priority rather than a flat list:
+
+1. **Windows — day one.** Primary development and first-supported
+   platform.
+2. **Linux — next.** Added once Windows support is solid; still the
+   realistic production-deployment target for a client/server DB.
+3. **FreeBSD — much later.** Motivated specifically by ZFS.
+4. **Maybe/sometime, no concrete commitment:** other BSDs (DragonflyBSD,
+   OpenBSD, NetBSD), illumos (OmniOS/SmartOS — the original home of ZFS
+   and DTrace, which FreeBSD later ported), and macOS. None of these are
+   ruled out, but nothing beyond FreeBSD is currently planned for them;
+   they'd only get picked up if a concrete reason shows up.
+
+**Client tooling** ([0006](0006-admin-dev-client.md): CLI REPL, TUI,
+GUI) no longer tracks the server list uniformly — it now splits by
+interface form:
+
+- **CLI REPL and TUI strive to match the server's list exactly**,
+  platform for platform, at whatever stage the server reaches it:
+  Windows + Linux, then FreeBSD, then the maybe-sometime tier if the
+  server ever picks one of those up. These are lightweight enough
+  (no rendering toolkit) that there's little reason for them to lag
+  a platform the server already supports.
+- **GUI is required only on Windows + Linux.** Support for FreeBSD or
+  anything in the maybe-sometime tier is best-effort/if-possible, not a
+  commitment — GUI toolkit portability to less-common platforms can be
+  genuinely harder and isn't worth blocking on.
 
 ## Consequences
 

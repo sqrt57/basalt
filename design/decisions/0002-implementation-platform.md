@@ -1,10 +1,6 @@
 # ADR 0002: Implementation Platform
 
-Status: Decided (2026-07-10)
-
-## Decision
-
-Basalt's core engine will be built in **Rust**.
+Status: Proposed (2026-07-10)
 
 ## Context
 
@@ -25,6 +21,10 @@ Two inputs settled this:
   the same class of control — reasonable for a project where the person
   writing the storage engine is also its only reviewer.
 
+## Decision
+
+Basalt's core engine will be built in **Rust**.
+
 ## Consequences
 
 - No garbage collector to reason about in the storage/execution core —
@@ -42,4 +42,3 @@ Two inputs settled this:
   (backlog item 2's "Mixed" option) — default assumption is Rust
   end-to-end (server, and likely CLI tooling) unless a specific piece
   (e.g. a GUI client) later makes a strong case for another language.
-

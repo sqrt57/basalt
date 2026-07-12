@@ -1,11 +1,6 @@
 # ADR 0001: Scope
 
-Status: Decided (2026-07-10)
-
-## Decision
-
-Basalt is a **single-node, client/server relational database engine**,
-built as a **solo learning/research project**.
+Status: Proposed (2026-07-10)
 
 ## Context
 
@@ -21,6 +16,11 @@ Three inputs drove this:
   distributed systems like CockroachDB.
 - **Resourcing**: one person, spare-time. Scope has to stay small enough
   to actually finish and keep maintaining, not just start.
+
+## Decision
+
+Basalt is a **single-node, client/server relational database engine**,
+built as a **solo learning/research project**.
 
 ## Consequences
 
@@ -46,4 +46,3 @@ Three inputs drove this:
   should be evaluated against "can one person build and understand this
   in their spare time," not against "what would a commercial engine
   need."
-

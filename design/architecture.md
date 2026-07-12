@@ -1,8 +1,9 @@
-# Basalt — Current Architecture
+# Basalt — Proposed Architecture
 
 Snapshot of Basalt's design as of 2026-07-11, synthesized from every ADR
-in `design/decisions/`. This file is for orientation — the ADRs remain
-the authoritative record of *why* each decision was made; if this ever
+in `design/decisions/`. All ADRs are currently **proposed**, not yet
+decided. This file is for orientation — the ADRs remain the
+authoritative record of *why* each decision was made; if this ever
 drifts out of sync with an ADR, the ADR wins. Open questions not yet
 resolved are tracked in `design/backlog.md`, not here.
 

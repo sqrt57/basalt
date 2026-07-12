@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Basalt (code name) is a database engine in the pre-implementation design
 stage — no source code, build system, or test suite yet, just licensing
 and design material. See [design/README.md](design/README.md) for the
-design docs index (currently decided architecture, open questions,
+design docs index (currently proposed architecture, open questions,
 build order, and the ADRs); it's the entry point, not this file.
 
 Store AI-generated design docs under `design/`.
@@ -24,10 +24,10 @@ any code:
 
 1. Check `design/architecture.md` for whether the relevant area (scope,
    platform, architecture, SQL dialect, wire protocol, client tooling)
-   is already decided, and `design/backlog.md` for whether a specific
+   is already proposed, and `design/backlog.md` for whether a specific
    sub-question within it is still open.
 2. Record new design decisions as new ADRs under `design/decisions/`,
-   then update to match: `design/architecture.md` (decided-state
+   then update to match: `design/architecture.md` (proposed-state
    summary), `design/backlog.md` (remove the question if it's now
    resolved, or add new sub-questions the decision raised),
    `design/decisions/README.md` (add the new ADR to the index), and

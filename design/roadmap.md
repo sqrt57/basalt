@@ -3,7 +3,7 @@
 Derived from the ADRs in `decisions/`, roughly in sequence. This is a
 plan, not a decision — it can reorder as work actually starts or
 priorities shift, independent of any ADR changing. See
-[architecture.md](architecture.md) for the decided state this is
+[architecture.md](architecture.md) for the proposed state this is
 sequencing, and [backlog.md](backlog.md) for items intentionally left
 off this roadmap (deferred, not scheduled).
 
