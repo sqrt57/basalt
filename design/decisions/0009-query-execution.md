@@ -5,10 +5,11 @@ Status: Proposed (2026-07-10)
 ## Context
 
 Split out from the original implementation-architecture discussion
-([0004](0004-storage-engines.md)) since query execution strategy is a
-separate concern from storage engine design, driven by the two engines
-from [0004](0004-storage-engines.md) exposing a common iterator
-interface rather than by either engine's internals.
+([0004](0004-relational-storage-engine.md),
+[0010](0010-hierarchical-storage-engine.md)) since query execution
+strategy is a separate concern from storage engine design, driven by
+the two engines exposing a common iterator interface rather than by
+either engine's internals.
 
 Three approaches were considered — a tree-walking interpreter (Postgres-
 style), a bytecode VM (SQLite-style), and compiled query plans. A
@@ -42,6 +43,7 @@ bytecode VM, no JIT/compiled query plans.
   and keeps the door open to revisiting execution strategy later once
   correctness is established.
 - Both storage engines' scan/seek operators need to expose a common
-  iterator interface ([0004](0004-storage-engines.md)) so the
-  tree-walking executor can drive either engine without engine-specific
-  executor code.
+  iterator interface ([0004](0004-relational-storage-engine.md),
+  [0010](0010-hierarchical-storage-engine.md)) so the tree-walking
+  executor can drive either engine without engine-specific executor
+  code.

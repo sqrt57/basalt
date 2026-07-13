@@ -5,8 +5,9 @@ Status: Proposed (2026-07-10)
 ## Context
 
 Split out from the original implementation-architecture discussion
-([0004](0004-storage-engines.md)) since concurrency control and
-durability apply across both storage engines rather than being a
+([0004](0004-relational-storage-engine.md),
+[0010](0010-hierarchical-storage-engine.md)) since concurrency control
+and durability apply across both storage engines rather than being a
 property of either one.
 
 **Concurrency control**: of the three standard options (single-writer
@@ -28,7 +29,8 @@ durability boundary, not coordination between two independent logs.
 
 ## Decision
 
-Across both storage engines ([0004](0004-storage-engines.md)):
+Across both storage engines ([0004](0004-relational-storage-engine.md),
+[0010](0010-hierarchical-storage-engine.md)):
 
 - **Concurrency control**: shared **MVCC** — one versioning/visibility
   mechanism (transaction-ID stamping, snapshot-based visibility checks)

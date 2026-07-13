@@ -38,13 +38,14 @@ Windows + Linux, with other platforms best-effort.
 
 ## Storage Engines
 
-Two purpose-built storage engines, both B+-tree-backed:
+Two purpose-built storage engines, both B+-tree-backed, implementable
+independently of each other and sharing only the concurrency/durability
+substrate below:
 
 - A **row store** for relational tables.
+  ([0004](decisions/0004-relational-storage-engine.md))
 - A **GT.M/globals-style sparse associative array** for hierarchical
-  tables.
-
-([0004](decisions/0004-storage-engines.md))
+  tables. ([0010](decisions/0010-hierarchical-storage-engine.md))
 
 ## Concurrency Control & Durability
 
