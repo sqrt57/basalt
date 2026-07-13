@@ -30,18 +30,23 @@ here.
 
 ## Decision
 
-Query execution is a plain **tree-walking interpreter** (Volcano/
+Query execution starts as a plain **tree-walking interpreter** (Volcano/
 iterator model) — the query plan is a tree of operator nodes, executed
-by recursively pulling rows from the root down to leaf scans. No
-bytecode VM, no JIT/compiled query plans.
+by recursively pulling rows from the root down to leaf scans. A
+**bytecode VM** (SQLite-style) is a plausible next step after the
+tree-walking executor is solid, not something to build initially. No
+JIT/compiled query plans — that path was explored via Cranelift and
+reverted (see Context), and stays rejected rather than deferred.
 
 ## Consequences
 
 - Tree-walking execution has real per-row interpretation overhead
   compared to a bytecode VM or compiled plans, but is the simplest to
-  build correctly first, matches the logical query plan most directly,
-  and keeps the door open to revisiting execution strategy later once
-  correctness is established.
+  build correctly first and matches the logical query plan most
+  directly. A bytecode VM is the natural next step once correctness is
+  established and the overhead becomes worth addressing; JIT/compiled
+  query plans are not part of that path — they stay rejected, not just
+  deferred.
 - Both storage engines' scan/seek operators need to expose a common
   iterator interface ([0004](0004-relational-storage-engine.md),
   [0010](0010-hierarchical-storage-engine.md)) so the tree-walking

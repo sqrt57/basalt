@@ -10,9 +10,10 @@ resolved are tracked in `design/backlog.md`, not here.
 ## What Basalt Is
 
 Single-node, client/server relational database engine, built as a solo
-learning/research project. Distributed/clustered operation and heavy
-enterprise tooling are explicitly out of scope for now. Embedded/
-in-process linking is out of scope by default, but optional later if it
+learning/research project. Client/server is the primary and initial
+target; distributed/clustered operation and heavy enterprise tooling are
+explicitly out of scope for now. An in-process/embedded mode is a
+possible later stage — optional and not committed, added only if it
 ends up free (see [backlog.md](backlog.md)). ([0001](decisions/0001-scope.md))
 
 ## Implementation Platform
@@ -56,8 +57,10 @@ regardless of which engine(s) a transaction touches.
 
 ## Query Execution
 
-A plain tree-walking interpreter (Volcano/iterator model) — not a
-bytecode VM or compiled plans. ([0009](decisions/0009-query-execution.md))
+Starts as a plain tree-walking interpreter (Volcano/iterator model); a
+bytecode VM (SQLite-style) is a plausible next stage once that's solid.
+JIT/compiled query plans remain rejected outright — already explored via
+Cranelift and reverted. ([0009](decisions/0009-query-execution.md))
 
 ## SQL Support
 
@@ -65,9 +68,11 @@ Starts with a simple SQL subset (basic DDL/DML: `CREATE TABLE`,
 `SELECT`/`INSERT`/`UPDATE`/`DELETE`, straightforward `WHERE`/`JOIN`),
 targeting Postgres-dialect compatibility as the distant goal. A
 PL/pgSQL-like procedural language is a later addition. Isolation level
-is a per-database server setting (not per-transaction), supporting the
-usual five: Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
-Serializable. ([0005](decisions/0005-sql-support.md))
+is a per-database server setting (not per-transaction), targeting the
+usual five (Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
+Serializable) built up incrementally starting from Snapshot — native to
+the shared MVCC substrate — rather than landing all five at once.
+([0005](decisions/0005-sql-support.md))
 
 ## Client Tooling
 

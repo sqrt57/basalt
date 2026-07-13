@@ -20,7 +20,9 @@ Three inputs drove this:
 ## Decision
 
 Basalt is a **single-node, client/server relational database engine**,
-built as a **solo learning/research project**.
+built as a **solo learning/research project**. Client/server is the
+primary and initial target; an in-process/embedded mode is a possible
+later stage, not a first-stage goal (see Consequences).
 
 ## Consequences
 
@@ -33,17 +35,20 @@ built as a **solo learning/research project**.
 **Out of scope for now:**
 - Distributed/clustered operation: replication, sharding, multi-node
   transactions, HA/failover.
-- Embedded/in-process linking mode: not a primary target, but
-  **optional if it comes for free** — if the storage/execution engine
-  core ([0004](0004-relational-storage-engine.md),
-  [0010](0010-hierarchical-storage-engine.md)) ends up as an
-  independently linkable crate separate from the network/wire-protocol
-  layer, an embedded build mode may be added opportunistically later.
-  Not worth restructuring the engine to enable; see
-  [backlog.md](../backlog.md).
 - Heavy enterprise tooling: elaborate RBAC, monitoring suites, backup
   orchestration. A minimal admin surface is fine; building a full
   enterprise ops story is not a goal.
+
+**Possible later stage:**
+- Embedded/in-process linking mode: not a first-stage goal, but
+  **optional if it comes for free** as a second stage after the
+  client/server core exists — if the storage/execution engine core
+  ([0004](0004-relational-storage-engine.md),
+  [0010](0010-hierarchical-storage-engine.md)) ends up as an
+  independently linkable crate separate from the network/wire-protocol
+  layer, an embedded build mode may be added opportunistically then.
+  Not a committed stage, and not worth restructuring the engine to
+  enable; see [backlog.md](../backlog.md).
 
 **Priorities:**
 - Clarity and correctness of implementation outrank raw performance or
