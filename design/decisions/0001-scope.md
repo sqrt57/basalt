@@ -33,8 +33,12 @@ built as a **solo learning/research project**.
 **Out of scope for now:**
 - Distributed/clustered operation: replication, sharding, multi-node
   transactions, HA/failover.
-- Embedded/in-process linking mode (no SQLite-style "just a library"
-  target).
+- Embedded/in-process linking mode: not a primary target, but
+  **optional if it comes for free** — if the storage/execution engine
+  core ([0004](0004-storage-engines.md)) ends up as an independently
+  linkable crate separate from the network/wire-protocol layer, an
+  embedded build mode may be added opportunistically later. Not worth
+  restructuring the engine to enable; see [backlog.md](../backlog.md).
 - Heavy enterprise tooling: elaborate RBAC, monitoring suites, backup
   orchestration. A minimal admin surface is fine; building a full
   enterprise ops story is not a goal.

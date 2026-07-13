@@ -15,13 +15,13 @@ informs the shape of the subset now, not just a later rewrite.
 Procedural extensions follow the same "distant goal, simple start"
 pattern as the SQL level itself — a PL/pgSQL-like language is the
 eventual target, but isn't needed until the core SQL subset and execution
-engine ([0004](0004-implementation-architecture.md)) are solid. Reusing
+engine ([0009](0009-query-execution.md)) are solid. Reusing
 an existing embedded language runtime (e.g. WASM via Wasmtime) was
 raised as a possible implementation path for procedural extensions during
 the item 4 discussion and remains open for when this is picked up.
 
 Isolation levels: this reverses the earlier snapshot-isolation-only
-decision. [0004](0004-implementation-architecture.md) already committed
+decision. [0008](0008-concurrency-durability.md) already committed
 to shared MVCC as the concurrency mechanism across both storage engines;
 that choice doesn't force a single exposed isolation level, and
 Postgres itself proves the pattern of offering several levels (Read

@@ -10,9 +10,10 @@ resolved are tracked in `design/backlog.md`, not here.
 ## What Basalt Is
 
 Single-node, client/server relational database engine, built as a solo
-learning/research project. Distributed/clustered operation, embedded/
-in-process linking, and heavy enterprise tooling are explicitly out of
-scope for now. ([0001](decisions/0001-scope.md))
+learning/research project. Distributed/clustered operation and heavy
+enterprise tooling are explicitly out of scope for now. Embedded/
+in-process linking is out of scope by default, but optional later if it
+ends up free (see [backlog.md](backlog.md)). ([0001](decisions/0001-scope.md))
 
 ## Implementation Platform
 
@@ -35,17 +36,27 @@ the server's platform list exactly; GUI is required only on
 Windows + Linux, with other platforms best-effort.
 ([0003](decisions/0003-supported-os.md))
 
-## Storage & Execution Architecture
+## Storage Engines
 
-Two purpose-built storage engines, both B+-tree-backed, sharing MVCC
-concurrency control and a single WAL:
+Two purpose-built storage engines, both B+-tree-backed:
 
 - A **row store** for relational tables.
 - A **GT.M/globals-style sparse associative array** for hierarchical
   tables.
 
-Query execution is a plain tree-walking interpreter (not a bytecode VM
-or compiled plans). ([0004](decisions/0004-implementation-architecture.md))
+([0004](decisions/0004-storage-engines.md))
+
+## Concurrency Control & Durability
+
+Both storage engines share one **MVCC** concurrency mechanism and a
+single **WAL** — one durability boundary and one crash-recovery path
+regardless of which engine(s) a transaction touches.
+([0008](decisions/0008-concurrency-durability.md))
+
+## Query Execution
+
+A plain tree-walking interpreter (Volcano/iterator model) — not a
+bytecode VM or compiled plans. ([0009](decisions/0009-query-execution.md))
 
 ## SQL Support
 

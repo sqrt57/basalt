@@ -7,8 +7,11 @@ priorities shift, independent of any ADR changing. See
 sequencing, and [backlog.md](backlog.md) for items intentionally left
 off this roadmap (deferred, not scheduled).
 
-1. Storage/execution core ([0004](decisions/0004-implementation-architecture.md))
-   against the minimal SQL subset ([0005](decisions/0005-sql-support.md)).
+1. Storage engines ([0004](decisions/0004-storage-engines.md)),
+   concurrency/durability
+   ([0008](decisions/0008-concurrency-durability.md)), and query
+   execution ([0009](decisions/0009-query-execution.md)) against the
+   minimal SQL subset ([0005](decisions/0005-sql-support.md)).
 2. Native wire protocol ([0007](decisions/0007-wire-protocol.md)) plus
    the CLI REPL ([0006](decisions/0006-admin-dev-client.md)) — the first
    client.
