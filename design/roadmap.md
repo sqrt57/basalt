@@ -14,7 +14,13 @@ off this roadmap (deferred, not scheduled).
    concurrency/durability ([0008](decisions/0008-concurrency-durability.md))
    and query execution ([0009](decisions/0009-query-execution.md))
    against the minimal SQL subset ([0005](decisions/0005-sql-support.md)).
-2. Native wire protocol ([0007](decisions/0007-wire-protocol.md)) plus
-   the CLI REPL ([0006](decisions/0006-admin-dev-client.md)) — the first
-   client.
-3. TUI and GUI, then the Web console alongside/after GUI.
+   Built from the start as an independently linkable crate, separate
+   from any network/wire-protocol layer ([0001](decisions/0001-scope.md)).
+2. In-process/embedded build mode — expose that engine core directly as
+   a library, no server process required. First usable form of Basalt
+   ([0001](decisions/0001-scope.md)).
+3. Native wire protocol ([0007](decisions/0007-wire-protocol.md)) plus
+   the CLI REPL ([0006](decisions/0006-admin-dev-client.md)) — a server
+   process wraps the same engine core and becomes the first
+   client/server-facing form.
+4. TUI and GUI, then the Web console alongside/after GUI.

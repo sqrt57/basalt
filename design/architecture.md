@@ -9,12 +9,12 @@ resolved are tracked in `design/backlog.md`, not here.
 
 ## What Basalt Is
 
-Single-node, client/server relational database engine, built as a solo
-learning/research project. Client/server is the primary and initial
-target; distributed/clustered operation and heavy enterprise tooling are
-explicitly out of scope for now. An in-process/embedded mode is a
-possible later stage — optional and not committed, added only if it
-ends up free (see [backlog.md](backlog.md)). ([0001](decisions/0001-scope.md))
+Single-node relational database engine, built as a solo learning/
+research project. Ships first as an in-process/embedded library — no
+server process required; client/server mode, wrapping the same engine
+core, is a committed second stage, not the first-stage goal.
+Distributed/clustered operation and heavy enterprise tooling are
+explicitly out of scope for now. ([0001](decisions/0001-scope.md))
 
 ## Implementation Platform
 

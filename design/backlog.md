@@ -37,14 +37,6 @@ raised and set aside without a commitment either way.
   actually surfaced under a versioned (MVCC) storage model, where reads
   normally see a consistent snapshot rather than in-flight writes. Not
   decided ([0005](decisions/0005-sql-support.md)).
-- **In-process/embedded linking mode** — optional if it comes for free:
-  gated on whether the storage/execution engine core
-  ([0004](decisions/0004-relational-storage-engine.md),
-  [0010](decisions/0010-hierarchical-storage-engine.md)) ends up as an
-  independently linkable crate separate from the network/wire-protocol
-  layer ([0007](decisions/0007-wire-protocol.md)). Not committed either
-  way; revisit once the engine/workspace crate layout exists.
-  ([0001](decisions/0001-scope.md))
 
 ## Deferred, Not Yet Scheduled
 

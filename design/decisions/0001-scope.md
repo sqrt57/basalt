@@ -1,6 +1,6 @@
 # ADR 0001: Scope
 
-Status: Proposed (2026-07-10)
+Status: Proposed (2026-07-10), revised (2026-07-13)
 
 ## Context
 
@@ -10,26 +10,34 @@ Three inputs drove this:
   database engine works end-to-end (storage, transactions, query
   processing, wire protocol) — not to hit production SLAs or feature-match
   incumbents.
-- **Deployment model**: client/server, single-node. A standalone server
-  process on one machine, no built-in clustering — closer to early
-  Postgres/MySQL than to SQLite (no embedding requirement) or to
-  distributed systems like CockroachDB.
+- **Deployment model**: single-node, in-process/embedded first — a
+  linkable engine core usable directly from a host process, closer to
+  SQLite/DuckDB than to a server-only engine. Client/server (a
+  standalone server process on one machine, no built-in clustering) is
+  a committed second stage layered on that same core — still
+  single-node, not a distributed system like CockroachDB.
 - **Resourcing**: one person, spare-time. Scope has to stay small enough
   to actually finish and keep maintaining, not just start.
 
 ## Decision
 
-Basalt is a **single-node, client/server relational database engine**,
-built as a **solo learning/research project**. Client/server is the
-primary and initial target; an in-process/embedded mode is a possible
-later stage, not a first-stage goal (see Consequences).
+Basalt is a **single-node relational database engine**, built as a
+**solo learning/research project**. It ships first as an **in-process/
+embedded library** — no server process required; a **client/server
+mode**, wrapping the same engine core, is a committed second stage, not
+the first-stage goal (see Consequences).
 
 ## Consequences
 
 **In scope:**
-- A real server process speaking a network protocol to clients.
 - A genuine (if minimal) relational storage and query engine — not a toy
-  that skips durability or transactions to save time.
+  that skips durability or transactions to save time — built from the
+  start as an independently linkable crate
+  ([0004](0004-relational-storage-engine.md),
+  [0010](0010-hierarchical-storage-engine.md)), separate from any
+  network/wire-protocol layer.
+- An in-process/embedded build mode exposing that engine core directly:
+  no server process required to use Basalt.
 - Incremental SQL support, grown as far as remains interesting/learnable.
 
 **Out of scope for now:**
@@ -39,16 +47,13 @@ later stage, not a first-stage goal (see Consequences).
   orchestration. A minimal admin surface is fine; building a full
   enterprise ops story is not a goal.
 
-**Possible later stage:**
-- Embedded/in-process linking mode: not a first-stage goal, but
-  **optional if it comes for free** as a second stage after the
-  client/server core exists — if the storage/execution engine core
-  ([0004](0004-relational-storage-engine.md),
-  [0010](0010-hierarchical-storage-engine.md)) ends up as an
-  independently linkable crate separate from the network/wire-protocol
-  layer, an embedded build mode may be added opportunistically then.
-  Not a committed stage, and not worth restructuring the engine to
-  enable; see [backlog.md](../backlog.md).
+**Committed second stage:**
+- Client/server mode: a standalone server process speaking a network
+  protocol ([0007](0007-wire-protocol.md)) to clients, wrapping the same
+  engine core the embedded library exposes. The engine/network split
+  above exists specifically so this wrapping is straightforward once the
+  embedded core is solid — not a first-stage goal, but not optional
+  either.
 
 **Priorities:**
 - Clarity and correctness of implementation outrank raw performance or
