@@ -51,12 +51,18 @@ level state) at the cost of per-transaction flexibility Postgres offers.
   consistent with the Postgres target. Starts minimal/none and grows
   alongside the SQL subset itself, on the same phased trajectory.
 - **Isolation levels**: **configurable as a per-database server
-  setting** (not per-transaction/per-session), supporting the usual
+  setting** (not per-transaction/per-session), targeting the usual
   five — **Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
-  Serializable** — rather than exposing only one.
+  Serializable** — rather than exposing only one, though like the SQL
+  subset, support can be built up incrementally from the simplest level
+  rather than landing all five at once.
 
 ## Consequences
 
+- The SQL subset and the isolation levels supported are independent
+  growth axes raised by this ADR — each can be built starting from its
+  simplest option and expanded incrementally, rather than needing to
+  land complete at once.
 - Early query surface will be deliberately narrow; features get added
   incrementally rather than attempting broad ANSI SQL coverage upfront.
 - Syntax/semantics decisions for the initial subset should default to
@@ -64,13 +70,18 @@ level state) at the cost of per-transaction flexibility Postgres offers.
   to be unwound later for item 7.
 - No procedural SQL (stored procedures/functions) in the initial scope —
   revisit once the core executor and SQL subset are stable.
-- All five isolation levels (Read Uncommitted, Read Committed, Repeatable
-  Read, Snapshot, Serializable) need to be exposed and tested from the
-  start, not just one — more surface area for the transaction layer than
-  a single fixed level. Since it's a per-database setting rather than
-  per-transaction, there's no need for transaction-scoped isolation-level
-  state or `SET TRANSACTION ISOLATION LEVEL`-style syntax, but changing
-  a database's level is an administrative operation, not something a
+- Isolation levels can likewise be added one at a time rather than all
+  five (Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
+  Serializable) landing together. **Snapshot** is the natural starting
+  point since it falls directly out of the shared MVCC substrate's native
+  visibility rules ([0008](0008-concurrency-durability.md)), with Read
+  Committed, Repeatable Read, Serializable, and Read Uncommitted layered
+  on afterward — more surface area for the transaction layer to eventually
+  cover than a single fixed level, but not all required up front. Since
+  it's a per-database setting rather than per-transaction, there's no
+  need for transaction-scoped isolation-level state or
+  `SET TRANSACTION ISOLATION LEVEL`-style syntax, but changing a
+  database's level is an administrative operation, not something a
   client can do mid-session.
 - True Serializable is a stronger guarantee than snapshot isolation
   alone provides; how it's actually implemented on top of the shared
