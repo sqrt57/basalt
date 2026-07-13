@@ -41,19 +41,19 @@ unscheduled work.
 
 ## Decision
 
-Basalt implements its **own native wire protocol** as the primary
-protocol — this is what the CLI REPL ([0006](0006-admin-dev-client.md))
-speaks, and it is the committed target for client connectivity, not just
-a first phase. **Postgres wire-protocol compatibility** (backlog item 7,
-formerly item 8 before items 6/7 were merged) is an **optional,
-uncommitted possibility** — it may be built later as a separate interop
-layer for third-party tooling (`psql`, pgAdmin, DBeaver, ORMs/drivers
-such as npgsql/psycopg/JDBC) if there's a leverage case for it at the
-time, but Basalt's design does not assume it will happen.
-
-**Native client libraries**: initial language coverage is **Rust, .NET,
-and C**, with **Rust as top priority**. Other languages are later,
-unscheduled work.
+- **Native wire protocol**: Basalt's **own native wire protocol** is the
+  primary, committed target for client connectivity — not just a first
+  phase. This is what the CLI REPL ([0006](0006-admin-dev-client.md))
+  speaks.
+- **Postgres wire-protocol compatibility** (backlog item 7, formerly
+  item 8 before items 6/7 were merged): an **optional, uncommitted
+  possibility** — it may be built later as a separate interop layer for
+  third-party tooling (`psql`, pgAdmin, DBeaver, ORMs/drivers such as
+  npgsql/psycopg/JDBC) if there's a leverage case for it at the time, but
+  Basalt's design does not assume it will happen.
+- **Native client libraries**: initial language coverage is **Rust, C,
+  and .NET**, with **Rust as top priority**. Other languages are later,
+  unscheduled work.
 
 ## Consequences
 
