@@ -22,11 +22,6 @@ raised and set aside without a commitment either way.
   Web ([0006](decisions/0006-admin-dev-client.md)) are both unstaged
   past [roadmap.md](roadmap.md) stage 4; their relative order isn't
   decided.
-- **Stage-1 WAL checkpoint mechanism** — stage 1's real WAL
-  ([0008](decisions/0008-concurrency-durability.md)) needs a checkpoint
-  scheme to bound recovery replay, but its specifics (frequency/trigger,
-  fuzzy vs. sharp checkpoint, how dirty-page flushing is coordinated
-  with it) aren't decided.
 - **Stage-1 WAL log record format** — physical (before/after page
   images) vs. logical (operation-level) undo records, and whether redo
   records follow the same choice. Relevant once undo/redo logging

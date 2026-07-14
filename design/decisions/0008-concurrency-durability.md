@@ -66,6 +66,16 @@ for concurrency; the WAL applies starting at stage 1.
   applied, idempotently), a checkpoint mechanism (to bound how far back
   recovery replays), and compensation log records for undo (so a repeat
   crash mid-undo never re-undoes the same change twice).
+- **Checkpoint mechanism**: fuzzy. Two in-memory tables — a **dirty
+  page table** (page → recLSN, the LSN at which it was first dirtied
+  since its last flush) and a **transaction table** (open transaction →
+  start LSN, chained via each log record's **prevLSN** back to that
+  transaction's previous record) — are snapshotted and written to the
+  log as the checkpoint record, without pausing new transactions; the
+  dirty pages they describe keep flushing in the background rather than
+  being forced synchronously. A checkpoint fires on whichever comes
+  first: the WAL growing past a size threshold, or a timeout since the
+  last checkpoint.
 
 **Stage 4 ("other concurrency mechanisms")** — across both storage
 engines ([0004](0004-relational-storage-engine.md),
@@ -100,6 +110,18 @@ concurrency mechanism:
   real undo logging even for ordinary rollback (not just crash
   recovery), since a rolled-back transaction's dirty pages may already
   be on disk.
+- The checkpoint's transaction table only records that a transaction
+  was open *as of* the checkpoint; recovery still scans forward from
+  there to the end of the log to check whether it went on to commit
+  before the actual crash. Simpler than full multi-transaction ARIES
+  analysis, not a replacement for it.
+- Chaining every log record to its transaction's previous record via
+  prevLSN isn't needed for undo correctness at stage 1 — single-writer
+  concurrency means the log has no interleaving to disambiguate, so
+  undo could just scan backward through the whole log unaided. It's
+  included anyway so the log format doesn't need reworking once stage 4
+  allows overlapping transactions, where prevLSN chaining becomes
+  necessary rather than incidental.
 - MVCC requires multi-version storage and eventual version reclamation
   (a Postgres-`VACUUM`-like mechanism) in both engines, once stage 4
   lands — accepted as the cost of readers/writers never blocking each
