@@ -1,6 +1,6 @@
 # ADR 0005: SQL Support
 
-Status: Proposed (2026-07-10)
+Status: Proposed (2026-07-10), revised (2026-07-14)
 
 ## Context
 
@@ -55,7 +55,11 @@ level state) at the cost of per-transaction flexibility Postgres offers.
   five — **Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
   Serializable** — rather than exposing only one, though like the SQL
   subset, support can be built up incrementally from the simplest level
-  rather than landing all five at once.
+  rather than landing all five at once. This entire axis is moot for
+  stage 1 ([0008](0008-concurrency-durability.md)): a single global lock
+  makes every transaction trivially serial, with no isolation-level
+  choice to expose. The five-level buildup begins once stage 4 brings
+  MVCC online.
 
 ## Consequences
 
@@ -73,11 +77,14 @@ level state) at the cost of per-transaction flexibility Postgres offers.
 - Isolation levels can likewise be added one at a time rather than all
   five (Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
   Serializable) landing together. **Snapshot** is the natural starting
-  point since it falls directly out of the shared MVCC substrate's native
-  visibility rules ([0008](0008-concurrency-durability.md)), with Read
-  Committed, Repeatable Read, Serializable, and Read Uncommitted layered
-  on afterward — more surface area for the transaction layer to eventually
-  cover than a single fixed level, but not all required up front. Since
+  point once stage 4 brings MVCC online
+  ([0008](0008-concurrency-durability.md)) — stage 1 predates MVCC
+  entirely and has no isolation-level surface at all — since Snapshot
+  falls directly out of the shared MVCC substrate's native visibility
+  rules, with Read Committed, Repeatable Read, Serializable, and Read
+  Uncommitted layered on afterward — more surface area for the
+  transaction layer to eventually cover than a single fixed level, but
+  not all required up front. Since
   it's a per-database setting rather than per-transaction, there's no
   need for transaction-scoped isolation-level state or
   `SET TRANSACTION ISOLATION LEVEL`-style syntax, but changing a

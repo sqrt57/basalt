@@ -1,6 +1,6 @@
 # Basalt — Proposed Architecture
 
-Snapshot of Basalt's design as of 2026-07-11, synthesized from every ADR
+Snapshot of Basalt's design as of 2026-07-14, synthesized from every ADR
 in `design/decisions/`. All ADRs are currently **proposed**, not yet
 decided. This file is for orientation — the ADRs remain the
 authoritative record of *why* each decision was made; if this ever
@@ -50,9 +50,14 @@ substrate below:
 
 ## Concurrency Control & Durability
 
-Both storage engines share one **MVCC** concurrency mechanism and a
-single **WAL** — one durability boundary and one crash-recovery path
-regardless of which engine(s) a transaction touches.
+Staged ([roadmap.md](roadmap.md)): the embedded core (stage 1) ships
+with the simplest mechanisms that hold up structurally — a single global
+lock (one writer at a time, blocking everyone else) and crash-safe
+writes without a WAL (atomic page writes + fsync on commit, no redo
+log). Both storage engines later share one **MVCC** concurrency
+mechanism and a single **WAL** — one durability boundary and one
+crash-recovery path regardless of which engine(s) a transaction touches
+— once that later stage (roadmap stage 4) lands.
 ([0008](decisions/0008-concurrency-durability.md))
 
 ## Query Execution
@@ -70,8 +75,10 @@ targeting Postgres-dialect compatibility as the distant goal. A
 PL/pgSQL-like procedural language is a later addition. Isolation level
 is a per-database server setting (not per-transaction), targeting the
 usual five (Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
-Serializable) built up incrementally starting from Snapshot — native to
-the shared MVCC substrate — rather than landing all five at once.
+Serializable). Isolation is moot in the embedded core (roadmap stage 1)
+— its single global lock makes every transaction trivially serial; the
+five-level buildup starts from Snapshot once MVCC lands (roadmap stage
+4), rather than landing all five at once.
 ([0005](decisions/0005-sql-support.md))
 
 ## Client Tooling
@@ -83,7 +90,10 @@ schema browsing, result display, explain-plan visualization). Shipped
 as four interface forms sharing one Rust core library crate:
 
 1. **CLI REPL/executor**, sqlcmd-style — built first, using
-   **reedline** for line editing.
+   **reedline** for line editing. Its first working form (roadmap stage
+   2) runs in-process against the embedded engine core, no network;
+   wire-protocol support follows once client/server (roadmap stage 3)
+   exists.
 2. **TUI** — ratatui + crossterm.
 3. **GUI** — Tauri (Rust backend, web frontend).
 4. **Web** — browser-based console bundled directly into the server

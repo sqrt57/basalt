@@ -17,6 +17,16 @@ raised and set aside without a commitment either way.
 - **TUI vs. GUI build order** — CLI ships first
   ([0006](decisions/0006-admin-dev-client.md)), but the relative order
   of TUI and GUI after that is undecided.
+- **Order after roadmap stage 4** — the hierarchical storage engine
+  ([0010](decisions/0010-hierarchical-storage-engine.md)) and TUI/GUI/
+  Web ([0006](decisions/0006-admin-dev-client.md)) are both unstaged
+  past [roadmap.md](roadmap.md) stage 4; their relative order isn't
+  decided.
+- **Stage-1 crash-safe write mechanism** — stage 1
+  ([roadmap.md](roadmap.md), [0008](decisions/0008-concurrency-durability.md))
+  commits to crash-safe writes without a WAL, but not the actual
+  technique (e.g. shadow paging/copy-on-write, checksummed pages with
+  torn-write detection, or something else). Not decided.
 - **Web console frontend stack** — expected to reuse the Tauri GUI's
   frontend ([0006](decisions/0006-admin-dev-client.md)), but the actual
   framework/stack choice hasn't been made.
@@ -27,16 +37,18 @@ raised and set aside without a commitment either way.
   table-rendering crate (`comfy-table` vs. `tabled`) are likely
   defaults, not firmly confirmed
   ([0006](decisions/0006-admin-dev-client.md)).
-- **Serializable isolation implementation strategy** — the shared MVCC
-  substrate ([0008](decisions/0008-concurrency-durability.md))
-  gives snapshot-style visibility naturally; true Serializable needs
-  additional conflict detection on top (e.g. Postgres-style SSI/
-  predicate locking vs. an alternative). Not decided
+- **Serializable isolation implementation strategy** — relevant once
+  stage 4 brings MVCC online ([roadmap.md](roadmap.md),
+  [0008](decisions/0008-concurrency-durability.md)): the shared MVCC
+  substrate gives snapshot-style visibility naturally, but true
+  Serializable needs additional conflict detection on top (e.g.
+  Postgres-style SSI/predicate locking vs. an alternative). Not decided
   ([0005](decisions/0005-sql-support.md)).
-- **Read Uncommitted implementation strategy** — how dirty reads are
-  actually surfaced under a versioned (MVCC) storage model, where reads
-  normally see a consistent snapshot rather than in-flight writes. Not
-  decided ([0005](decisions/0005-sql-support.md)).
+- **Read Uncommitted implementation strategy** — also a stage-4/MVCC-era
+  question: how dirty reads are actually surfaced under a versioned
+  (MVCC) storage model, where reads normally see a consistent snapshot
+  rather than in-flight writes. Not decided
+  ([0005](decisions/0005-sql-support.md)).
 
 - **Embedded config surface beyond DB file location** — isolation
   level, memory/cache limits, sync/fsync policy, read-only mode, and

@@ -1,6 +1,6 @@
 # ADR 0006: Admin/Dev Client
 
-Status: Proposed (2026-07-11)
+Status: Proposed (2026-07-11), revised (2026-07-14)
 
 ## Context
 
@@ -15,8 +15,13 @@ The CLI-first build order follows the backlog's suggested sequencing
 the sqlcmd (MS SQL Server) precedent for what that CLI should feel
 like: a REPL for interactive use, but also scriptable for automation.
 
-This decision is entangled with [0007](0007-wire-protocol.md): the CLI
-REPL is the first client to speak Basalt's own native wire protocol.
+This decision is entangled with [0007](0007-wire-protocol.md), but only
+from the point client/server exists: the CLI's very first working form
+([roadmap.md](../roadmap.md) stage 2) runs in-process against the
+embedded engine core directly, no network involved. Once client/server
+(stage 3) exists, the same CLI is the first client to speak Basalt's own
+native wire protocol — network support is added to it, not built as a
+separate tool.
 
 The web interface follows the "database ships its own web console"
 precedent (CockroachDB, RethinkDB) rather than the "separate web app
@@ -40,7 +45,9 @@ The unified client ships in four interface forms sharing one core:
 
 1. **CLI REPL/executor**, sqlcmd-style — interactive prompt plus
    scriptable non-interactive execution (run a `.sql` file, pipe
-   output). **Built first.**
+   output). **Built first**, in-process against the embedded engine core
+   ([roadmap.md](../roadmap.md) stage 2); gains wire-protocol/network
+   support once client/server (stage 3) exists.
 2. **TUI** (terminal UI).
 3. **GUI** (cross-platform).
 4. **Web** — browser-based, **bundled into the server** itself (the
@@ -83,8 +90,9 @@ client, result-set model) underneath:
 
 ## Consequences
 
-- Early client-side development effort concentrates on the CLI REPL and
-  the native protocol it speaks. The GUI toolkit choice is already
+- Early client-side development effort concentrates on the CLI REPL,
+  first in-process against the embedded core, then the native protocol
+  it speaks once client/server exists. The GUI toolkit choice is already
   settled (Tauri, see Tooling above), but actual GUI work is still
   deferred until CLI/TUI work is further along.
 - Because all four interface forms share one core, the admin/dev
