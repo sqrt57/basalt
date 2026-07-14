@@ -50,14 +50,17 @@ substrate below:
 
 ## Concurrency Control & Durability
 
-Staged ([roadmap.md](roadmap.md)): the embedded core (stage 1) ships
-with the simplest mechanisms that hold up structurally — a single global
-lock (one writer at a time, blocking everyone else) and crash-safe
-writes without a WAL (atomic page writes + fsync on commit, no redo
-log). Both storage engines later share one **MVCC** concurrency
-mechanism and a single **WAL** — one durability boundary and one
-crash-recovery path regardless of which engine(s) a transaction touches
-— once that later stage (roadmap stage 4) lands.
+Staged by concurrency, not by durability ([roadmap.md](roadmap.md)): the
+embedded core (stage 1) ships with the simplest concurrency mechanism
+that holds up structurally — a single global lock (one writer at a
+time, blocking everyone else) — but a real **write-ahead log** from the
+start, in its own file separate from the data file
+([0011](decisions/0011-embedded-config.md)). STEAL/NO-FORCE, with
+undo/redo logging; recovery is simpler than the general ARIES case
+since stage 1's single writer means at most one in-flight transaction
+to reconstruct at any crash point. Both storage engines later share one
+**MVCC** concurrency mechanism, layered onto the same WAL rather than
+replacing it, once that later stage (roadmap stage 4) lands.
 ([0008](decisions/0008-concurrency-durability.md))
 
 ## Query Execution

@@ -15,8 +15,9 @@ off this roadmap (deferred, not scheduled).
    - Simplest concurrency: a single global lock, one writer at a time,
      blocking everyone else — no MVCC yet
      ([0008](decisions/0008-concurrency-durability.md)).
-   - Simplest durability: crash-safe writes without a WAL (atomic page
-     writes + fsync on commit, no redo log)
+   - Durability via a real write-ahead log from the start — STEAL/
+     NO-FORCE, with undo/redo logging and single-writer-simplified
+     recovery (no multi-transaction analysis phase needed)
      ([0008](decisions/0008-concurrency-durability.md)).
    - Simplest SQL subset, no isolation-level surface yet — the global
      lock makes every transaction trivially serial
@@ -32,9 +33,10 @@ off this roadmap (deferred, not scheduled).
    wrapping the same engine core; the CLI from stage 2 gains a network
    mode rather than becoming a separate tool
    ([0001](decisions/0001-scope.md), [0006](decisions/0006-admin-dev-client.md)).
-4. Other concurrency mechanisms — MVCC replaces stage 1's global lock,
-   WAL-grade durability replaces stage 1's sync-write durability, and
-   the SQL isolation-level buildup begins from Snapshot
+4. Other concurrency mechanisms — MVCC replaces stage 1's global lock
+   (durability's WAL, already in place since stage 1, only gains MVCC's
+   versioning metadata), and the SQL isolation-level buildup begins from
+   Snapshot
    ([0008](decisions/0008-concurrency-durability.md),
    [0005](decisions/0005-sql-support.md)).
 

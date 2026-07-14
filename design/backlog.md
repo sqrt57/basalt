@@ -22,11 +22,16 @@ raised and set aside without a commitment either way.
   Web ([0006](decisions/0006-admin-dev-client.md)) are both unstaged
   past [roadmap.md](roadmap.md) stage 4; their relative order isn't
   decided.
-- **Stage-1 crash-safe write mechanism** — stage 1
-  ([roadmap.md](roadmap.md), [0008](decisions/0008-concurrency-durability.md))
-  commits to crash-safe writes without a WAL, but not the actual
-  technique (e.g. shadow paging/copy-on-write, checksummed pages with
-  torn-write detection, or something else). Not decided.
+- **Stage-1 WAL checkpoint mechanism** — stage 1's real WAL
+  ([0008](decisions/0008-concurrency-durability.md)) needs a checkpoint
+  scheme to bound recovery replay, but its specifics (frequency/trigger,
+  fuzzy vs. sharp checkpoint, how dirty-page flushing is coordinated
+  with it) aren't decided.
+- **Stage-1 WAL log record format** — physical (before/after page
+  images) vs. logical (operation-level) undo records, and whether redo
+  records follow the same choice. Relevant once undo/redo logging
+  ([0008](decisions/0008-concurrency-durability.md)) is actually
+  implemented. Not decided.
 - **Web console frontend stack** — expected to reuse the Tauri GUI's
   frontend ([0006](decisions/0006-admin-dev-client.md)), but the actual
   framework/stack choice hasn't been made.
