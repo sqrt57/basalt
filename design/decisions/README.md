@@ -14,3 +14,5 @@ for implementation questions these ADRs left open.
 - [0008 — Concurrency Control & Durability](0008-concurrency-durability.md)
 - [0009 — Query Execution Model](0009-query-execution.md)
 - [0010 — Hierarchical Storage Engine](0010-hierarchical-storage-engine.md)
+- [0011 — Embedded Configuration: DB File Layout](0011-embedded-config.md)
+- [0012 — Server Configuration](0012-server-config.md)

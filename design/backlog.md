@@ -38,6 +38,19 @@ raised and set aside without a commitment either way.
   normally see a consistent snapshot rather than in-flight writes. Not
   decided ([0005](decisions/0005-sql-support.md)).
 
+- **Embedded config surface beyond DB file location** — isolation
+  level, memory/cache limits, sync/fsync policy, read-only mode, and
+  anything else the embedded builder/options should expose. Only file
+  location (path prefix) is decided so far
+  ([0011](decisions/0011-embedded-config.md)).
+- **Server's own config file location** — default path next to the
+  executable, a CLI flag pointing at it, or something else. Not decided
+  ([0012](decisions/0012-server-config.md)).
+- **CLI flag / env var overrides for server config** — whether values
+  from the TOML file ([0012](decisions/0012-server-config.md)) can be
+  overridden by CLI flags or env vars, and their precedence if so. Not
+  decided.
+
 ## Deferred, Not Yet Scheduled
 
 Raised as possibilities but with no committed timeline — not ruled out,

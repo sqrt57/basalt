@@ -103,6 +103,22 @@ either. Native client libraries are committed for Rust, C, and .NET
 initially, Rust first (other languages later, unscheduled).
 ([0007](decisions/0007-wire-protocol.md))
 
+## Embedded Configuration
+
+A database is identified by a single path prefix; the engine derives
+exactly two files from it — `<prefix>.data.bin` (both storage engines'
+data, one shared page allocator) and `<prefix>.log.bin` (the shared
+WAL). No directory convention, no per-engine file.
+([0011](decisions/0011-embedded-config.md))
+
+## Server Configuration
+
+A TOML config file lists the databases a server process hosts — each a
+`name` (what clients connect to) paired with a `path` prefix
+([0011](decisions/0011-embedded-config.md)), absolute or relative to the
+server executable's own directory — plus the listen address/port.
+([0012](decisions/0012-server-config.md))
+
 See [roadmap.md](roadmap.md) for build order/sequencing derived from
 these decisions.
 
