@@ -31,13 +31,6 @@ raised and set aside without a commitment either way.
   ([0013](decisions/0013-page-reclamation.md)) stops working too and
   would need to move to per-page refcounting or another scheme — also
   not decided.
-- **Isolation-level framing may need revisiting** — stage 1's
-  tree-snapshot readers already get a fully consistent, unchanging view
-  of the database for their whole transaction
-  ([0008](decisions/0008-concurrency-durability.md)), which may already
-  amount to Snapshot isolation (or better) rather than isolation being
-  moot until stage 4, as [0005](decisions/0005-sql-support.md)
-  currently frames it. Not resolved.
 - **Web console frontend stack** — expected to reuse the Tauri GUI's
   frontend ([0006](decisions/0006-admin-dev-client.md)), but the actual
   framework/stack choice hasn't been made.
@@ -48,17 +41,22 @@ raised and set aside without a commitment either way.
   table-rendering crate (`comfy-table` vs. `tabled`) are likely
   defaults, not firmly confirmed
   ([0006](decisions/0006-admin-dev-client.md)).
-- **Serializable isolation implementation strategy** — relevant once
-  stage 4 brings concurrent writers online ([roadmap.md](roadmap.md),
-  [0008](decisions/0008-concurrency-durability.md)): the shared MVCC
-  substrate gives snapshot-style visibility naturally, but true
-  Serializable needs additional conflict detection on top (e.g.
-  Postgres-style SSI/predicate locking vs. an alternative). Not decided
-  ([0005](decisions/0005-sql-support.md)).
-- **Read Uncommitted implementation strategy** — also a stage-4/
-  concurrent-writer-era question: how dirty reads are actually surfaced
-  under a versioned (MVCC) storage model, where reads normally see a
-  consistent snapshot rather than in-flight writes. Not decided
+- **Serializable isolation implementation strategy** — stage 1's
+  single-writer restriction may make Serializable reachable for free
+  (no concurrent writers means no write skew, the anomaly that
+  otherwise separates Snapshot from Serializable); whether that's
+  actually true, and worth implementing opportunistically at stage 1,
+  isn't confirmed. Once stage 4 brings concurrent writers online
+  ([roadmap.md](roadmap.md),
+  [0008](decisions/0008-concurrency-durability.md)), that free ride
+  ends and true Serializable needs real conflict detection on top of
+  the shared MVCC substrate (e.g. Postgres-style SSI/predicate locking
+  vs. an alternative). Not decided ([0005](decisions/0005-sql-support.md)).
+- **Read Uncommitted implementation strategy** — relevant from stage 1
+  onward, since MVCC (and the Snapshot-level consistency it gives by
+  default) already exists there: how dirty reads would actually be
+  surfaced under this versioned storage model when weaker visibility is
+  explicitly requested. Not decided
   ([0005](decisions/0005-sql-support.md)).
 
 - **Embedded config surface beyond DB file location** — isolation

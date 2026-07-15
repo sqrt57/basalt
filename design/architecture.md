@@ -88,10 +88,14 @@ targeting Postgres-dialect compatibility as the distant goal. A
 PL/pgSQL-like procedural language is a later addition. Isolation level
 is a per-database server setting (not per-transaction), targeting the
 usual five (Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
-Serializable). Isolation is moot in the embedded core (roadmap stage 1)
-— its single global lock makes every transaction trivially serial; the
-five-level buildup starts from Snapshot once MVCC lands (roadmap stage
-4), rather than landing all five at once.
+Serializable). The embedded core (roadmap stage 1) already meets
+**Snapshot** isolation from day one, not starting later — its
+copy-on-write tree-snapshot reads ([0008](decisions/0008-concurrency-durability.md))
+give every reader a fixed, fully consistent view of the whole database
+for its transaction. Stage 1's single-writer restriction may even reach
+**Serializable** for free (no concurrent writers means no write skew),
+though that's not committed to as a guarantee; the remaining levels are
+layered on as the buildup continues.
 ([0005](decisions/0005-sql-support.md))
 
 ## Client Tooling

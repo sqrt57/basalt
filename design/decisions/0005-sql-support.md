@@ -1,6 +1,6 @@
 # ADR 0005: SQL Support
 
-Status: Proposed (2026-07-10), revised (2026-07-14)
+Status: Proposed (2026-07-10), revised (2026-07-14), revised (2026-07-15)
 
 ## Context
 
@@ -36,6 +36,21 @@ deliberate simplification, not a dialect-compatibility concern; it
 narrows what the transaction layer needs to track (no per-transaction
 level state) at the cost of per-transaction flexibility Postgres offers.
 
+[0008](0008-concurrency-durability.md)'s later revision replaced stage
+1's originally planned plain global lock with a copy-on-write
+tree-snapshot design, still for stage 1. That changes the isolation
+picture this ADR originally assumed: a stage-1 reader already gets a
+fixed, fully consistent view of the whole database for its entire
+transaction, which is real Snapshot Isolation, not the "moot, trivially
+serial" state a plain lock would give. Separately, stage 1's
+single-writer restriction rules out write skew — the anomaly that
+normally separates Snapshot from Serializable, since it needs two
+writers in flight at once — which raises the possibility that stage 1
+could deliver Serializable for free too. That stronger claim isn't
+adopted here: it's noted as worth implementing opportunistically if it
+turns out to need no real extra work, rather than committed to as a
+guarantee.
+
 ## Decision
 
 - **Level**: start with a **simple SQL subset** — basic DDL/DML
@@ -55,11 +70,19 @@ level state) at the cost of per-transaction flexibility Postgres offers.
   five — **Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
   Serializable** — rather than exposing only one, though like the SQL
   subset, support can be built up incrementally from the simplest level
-  rather than landing all five at once. This entire axis is moot for
-  stage 1 ([0008](0008-concurrency-durability.md)): a single global lock
-  makes every transaction trivially serial, with no isolation-level
-  choice to expose. The five-level buildup begins once stage 4 brings
-  MVCC online.
+  rather than landing all five at once. Stage 1 already clears the
+  **Snapshot** bar from day one, not starting at stage 4 as originally
+  framed: its copy-on-write tree-snapshot reads
+  ([0008](0008-concurrency-durability.md)) give every reader a fixed,
+  fully consistent view of the whole database for its entire
+  transaction, with no separate mechanism needed. **Serializable** may
+  be reachable at stage 1 too, essentially for free, since stage 1's
+  single-writer restriction rules out write skew — but this isn't
+  committed to as a guarantee here: implement it opportunistically if it
+  needs no real extra work, otherwise let it arrive properly once the
+  isolation-level buildup reaches Serializable on its own (relevant
+  again once stage 4 brings concurrent writers and reopens the
+  write-skew question — see [backlog.md](../backlog.md)).
 
 ## Consequences
 
@@ -76,26 +99,29 @@ level state) at the cost of per-transaction flexibility Postgres offers.
   revisit once the core executor and SQL subset are stable.
 - Isolation levels can likewise be added one at a time rather than all
   five (Read Uncommitted, Read Committed, Repeatable Read, Snapshot,
-  Serializable) landing together. **Snapshot** is the natural starting
-  point once stage 4 brings MVCC online
-  ([0008](0008-concurrency-durability.md)) — stage 1 predates MVCC
-  entirely and has no isolation-level surface at all — since Snapshot
-  falls directly out of the shared MVCC substrate's native visibility
-  rules, with Read Committed, Repeatable Read, Serializable, and Read
-  Uncommitted layered on afterward — more surface area for the
-  transaction layer to eventually cover than a single fixed level, but
-  not all required up front. Since
-  it's a per-database setting rather than per-transaction, there's no
-  need for transaction-scoped isolation-level state or
+  Serializable) landing together. **Snapshot** is the starting point,
+  already met from stage 1 onward
+  ([0008](0008-concurrency-durability.md)) since it falls directly out
+  of the copy-on-write tree-snapshot reads stage 1 already has, not
+  something that waits for stage 4. Read Committed, Repeatable Read,
+  Serializable, and Read Uncommitted are layered on afterward — more
+  surface area for the transaction layer to eventually cover than a
+  single fixed level, but not all required up front. Since it's a
+  per-database setting rather than per-transaction, there's no need for
+  transaction-scoped isolation-level state or
   `SET TRANSACTION ISOLATION LEVEL`-style syntax, but changing a
   database's level is an administrative operation, not something a
   client can do mid-session.
-- True Serializable is a stronger guarantee than snapshot isolation
-  alone provides; how it's actually implemented on top of the shared
-  MVCC substrate (e.g. Postgres-style SSI/predicate-conflict detection
-  vs. locking) is not resolved by this ADR — see
+- True Serializable is a stronger guarantee than Snapshot Isolation
+  alone provides in general, though stage 1's single-writer restriction
+  may already rule out the gap between them (write skew needs two
+  writers in flight at once). Whether that gap is actually closed for
+  free at stage 1, and how Serializable is implemented once stage 4's
+  concurrent writers reopen it (e.g. Postgres-style SSI/predicate-
+  conflict detection vs. locking), is not resolved by this ADR — see
   [backlog.md](../backlog.md).
-- Read Uncommitted is a weaker guarantee than plain MVCC snapshot reads
-  naturally give; how dirty reads are actually surfaced under a
-  versioned storage model is also not resolved here — see
-  [backlog.md](../backlog.md).
+- Read Uncommitted is a weaker guarantee than the Snapshot-level
+  consistency stage 1's tree-snapshot reads already give by default;
+  how dirty reads would actually be surfaced under this versioned
+  storage model, when weaker visibility is explicitly requested, is not
+  resolved here — see [backlog.md](../backlog.md).
