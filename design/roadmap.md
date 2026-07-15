@@ -12,16 +12,21 @@ off this roadmap (deferred, not scheduled).
    - Relational storage only ([0004](decisions/0004-relational-storage-engine.md));
      the hierarchical engine ([0010](decisions/0010-hierarchical-storage-engine.md))
      is deferred, unstaged (see below).
-   - Simplest concurrency: a single global lock, one writer at a time,
-     blocking everyone else — no MVCC yet
+   - Single-writer MVCC: a copy-on-write B+-tree with one root pointer,
+     one write transaction at a time (still fully serialized, no
+     write-write conflict handling needed), but concurrent readers via
+     snapshot visibility, never blocked by the active writer
      ([0008](decisions/0008-concurrency-durability.md)).
    - Durability via a real write-ahead log from the start — STEAL/
-     NO-FORCE, with undo/redo logging and single-writer-simplified
-     recovery (no multi-transaction analysis phase needed)
+     NO-FORCE, redo-only (no undo, since an aborted/crashed
+     transaction's pages are simply unreferenced by any committed
+     root), binary-diff log records, fuzzy checkpointing
      ([0008](decisions/0008-concurrency-durability.md)).
-   - Simplest SQL subset, no isolation-level surface yet — the global
-     lock makes every transaction trivially serial
-     ([0005](decisions/0005-sql-support.md)).
+   - Simplest SQL subset
+     ([0005](decisions/0005-sql-support.md)); note that stage 1's
+     tree-snapshot readers may already amount to Snapshot isolation (or
+     better) rather than isolation being moot — see
+     [backlog.md](backlog.md).
    - Shipped in-process/embedded, no server process required
      ([0001](decisions/0001-scope.md)), as an independently linkable
      Rust library ([0002](decisions/0002-implementation-platform.md)).
@@ -33,10 +38,11 @@ off this roadmap (deferred, not scheduled).
    wrapping the same engine core; the CLI from stage 2 gains a network
    mode rather than becoming a separate tool
    ([0001](decisions/0001-scope.md), [0006](decisions/0006-admin-dev-client.md)).
-4. Other concurrency mechanisms — MVCC replaces stage 1's global lock
-   (durability's WAL, already in place since stage 1, only gains MVCC's
-   versioning metadata), and the SQL isolation-level buildup begins from
-   Snapshot
+4. Other concurrency mechanisms — concurrent writers replace stage 1's
+   single-writer restriction (concurrent snapshot readers already exist
+   since stage 1); durability is unchanged, no undo added. The SQL
+   isolation-level buildup continues from wherever stage 1's tree-
+   snapshot reads actually land
    ([0008](decisions/0008-concurrency-durability.md),
    [0005](decisions/0005-sql-support.md)).
 

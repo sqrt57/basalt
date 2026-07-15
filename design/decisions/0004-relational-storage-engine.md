@@ -55,3 +55,8 @@ family, physically backed by a **B+-tree**.
   ([0008](0008-concurrency-durability.md)) rather than an independent
   concurrency/durability scheme of its own, so transactions touching
   both engines commit atomically.
+- Pages are copy-on-write, not updated in place
+  ([0008](0008-concurrency-durability.md)): a write allocates new pages
+  along the path to the root rather than mutating a live page, so
+  "tuple-per-page layout" describes the logical layout within a page,
+  not an in-place update strategy.

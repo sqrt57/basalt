@@ -22,11 +22,22 @@ raised and set aside without a commitment either way.
   Web ([0006](decisions/0006-admin-dev-client.md)) are both unstaged
   past [roadmap.md](roadmap.md) stage 4; their relative order isn't
   decided.
-- **Stage-1 WAL log record format** — physical (before/after page
-  images) vs. logical (operation-level) undo records, and whether redo
-  records follow the same choice. Relevant once undo/redo logging
-  ([0008](decisions/0008-concurrency-durability.md)) is actually
-  implemented. Not decided.
+- **Page/version reclamation** — once no reader still holds a root that
+  reaches an old, unreferenced copy-on-write page, it needs reclaiming
+  ([0008](decisions/0008-concurrency-durability.md)). A
+  reference-counting or epoch-based scheme is implied but not designed.
+- **Stage-4 concurrent-writer mechanism** — stage 1's single evolving
+  root pointer ([0008](decisions/0008-concurrency-durability.md))
+  doesn't support concurrent writers as-is; reconciling independent
+  copy-on-write changes into one next root (or moving away from a
+  single root pointer) isn't decided.
+- **Isolation-level framing may need revisiting** — stage 1's
+  tree-snapshot readers already get a fully consistent, unchanging view
+  of the database for their whole transaction
+  ([0008](decisions/0008-concurrency-durability.md)), which may already
+  amount to Snapshot isolation (or better) rather than isolation being
+  moot until stage 4, as [0005](decisions/0005-sql-support.md)
+  currently frames it. Not resolved.
 - **Web console frontend stack** — expected to reuse the Tauri GUI's
   frontend ([0006](decisions/0006-admin-dev-client.md)), but the actual
   framework/stack choice hasn't been made.
@@ -38,16 +49,16 @@ raised and set aside without a commitment either way.
   defaults, not firmly confirmed
   ([0006](decisions/0006-admin-dev-client.md)).
 - **Serializable isolation implementation strategy** — relevant once
-  stage 4 brings MVCC online ([roadmap.md](roadmap.md),
+  stage 4 brings concurrent writers online ([roadmap.md](roadmap.md),
   [0008](decisions/0008-concurrency-durability.md)): the shared MVCC
   substrate gives snapshot-style visibility naturally, but true
   Serializable needs additional conflict detection on top (e.g.
   Postgres-style SSI/predicate locking vs. an alternative). Not decided
   ([0005](decisions/0005-sql-support.md)).
-- **Read Uncommitted implementation strategy** — also a stage-4/MVCC-era
-  question: how dirty reads are actually surfaced under a versioned
-  (MVCC) storage model, where reads normally see a consistent snapshot
-  rather than in-flight writes. Not decided
+- **Read Uncommitted implementation strategy** — also a stage-4/
+  concurrent-writer-era question: how dirty reads are actually surfaced
+  under a versioned (MVCC) storage model, where reads normally see a
+  consistent snapshot rather than in-flight writes. Not decided
   ([0005](decisions/0005-sql-support.md)).
 
 - **Embedded config surface beyond DB file location** — isolation

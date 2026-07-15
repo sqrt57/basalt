@@ -50,17 +50,20 @@ substrate below:
 
 ## Concurrency Control & Durability
 
-Staged by concurrency, not by durability ([roadmap.md](roadmap.md)): the
-embedded core (stage 1) ships with the simplest concurrency mechanism
-that holds up structurally — a single global lock (one writer at a
-time, blocking everyone else) — but a real **write-ahead log** from the
-start, in its own file separate from the data file
-([0011](decisions/0011-embedded-config.md)). STEAL/NO-FORCE, with
-undo/redo logging; recovery is simpler than the general ARIES case
-since stage 1's single writer means at most one in-flight transaction
-to reconstruct at any crash point. Both storage engines later share one
-**MVCC** concurrency mechanism, layered onto the same WAL rather than
-replacing it, once that later stage (roadmap stage 4) lands.
+The embedded core (stage 1) already runs on **MVCC**, just in its
+simplest form ([roadmap.md](roadmap.md)): a copy-on-write B+-tree with
+one root pointer, one write transaction at a time (fully serialized, no
+write-write conflict handling needed), but concurrent readers via
+snapshot visibility, never blocked by the active writer. A real
+**write-ahead log** backs it from the start, in its own file separate
+from the data file ([0011](decisions/0011-embedded-config.md)) —
+STEAL/NO-FORCE, redo-only (no undo: an aborted or crashed transaction's
+pages are simply unreferenced by any committed root), binary-diff log
+records, fuzzy checkpointing. Both storage engines later extend this to
+**concurrent writers** — a genuine open problem, not just "more
+concurrency," since a single evolving root pointer doesn't support it
+as-is — once that later stage (roadmap stage 4) lands; durability is
+unchanged at that point.
 ([0008](decisions/0008-concurrency-durability.md))
 
 ## Query Execution

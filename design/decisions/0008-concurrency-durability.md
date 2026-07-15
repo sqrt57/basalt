@@ -1,6 +1,6 @@
 # ADR 0008: Concurrency Control & Durability
 
-Status: Proposed (2026-07-10), revised (2026-07-14)
+Status: Proposed (2026-07-10), revised (2026-07-14), revised (2026-07-15)
 
 ## Context
 
@@ -15,11 +15,26 @@ serialization à la SQLite, locking à la classic SQL Server, MVCC à la
 Postgres), MVCC was chosen and shared across both engines rather than
 letting each engine pick its own strategy (e.g. a simpler locking model
 for the hierarchical engine, closer to GT.M's historical concurrency
-model). Sharing the versioning primitive — tagging a keyed value with a
-transaction ID and checking visibility the same way regardless of engine
-— was judged the path of least duplicated code, since both engines
-ultimately store "a keyed value" at the B+-tree level even though the key
-shapes differ.
+model). Sharing the versioning primitive was judged the path of least
+duplicated code, since both engines ultimately store "a keyed value" at
+the B+-tree level even though the key shapes differ.
+
+Two structurally different ways to implement MVCC were considered:
+**per-row versioning** with a durable transaction-status structure
+(Postgres-style: each row tagged with the transaction IDs that created
+and superseded it, visibility resolved via status lookups, dead
+versions reclaimed by a vacuum-like sweep), and **whole-tree
+copy-on-write snapshots** (LMDB/CouchDB-style: a transaction never
+mutates a live page, it writes new pages instead, and commit is a
+single atomic swap of one root pointer; a reader just walks whichever
+root was current when it started). Per-row versioning is what lets
+multiple writers commit independently, since visibility is resolved per
+row rather than gated by one serialized pointer — at the cost of a
+transaction-status structure and vacuum-style reclamation. Copy-on-write
+needs neither of those, but a single evolving root pointer inherently
+serializes commits, which is only free of cost while there's a single
+writer. Copy-on-write was chosen, since stage 1 (see below) is
+single-writer regardless.
 
 **Durability**: WAL was chosen over alternatives with no serious
 contenders discussed, per near-universal precedent (Postgres, SQL
@@ -27,112 +42,115 @@ Server, MySQL/InnoDB). Given MVCC is shared, a single shared WAL follows
 naturally — a transaction spanning both engines needs one atomic
 durability boundary, not coordination between two independent logs.
 
-**Staging**: MVCC is nontrivial to build, and the [build order](../roadmap.md)
-prioritizes getting a working embedded relational engine end-to-end
-before it exists. Stage 1 (the embedded core) ships with the simplest
-concurrency mechanism that still holds up structurally — a single
-global lock — and this ADR's MVCC decision becomes a later stage
-("other concurrency mechanisms") layered on once client/server
-([0001](0001-scope.md)) is underway.
+**Staging**: full MVCC — concurrent writers, write-write conflict
+handling, the five-level isolation buildup — is nontrivial, and the
+[build order](../roadmap.md) prioritizes a working embedded engine
+end-to-end before it exists. But the concurrency-control piece stage 1
+actually needs isn't "no MVCC," the way originally planned — it's
+**single-writer MVCC**: one write transaction at a time (still fully
+serialized, so no write-write conflict handling is needed yet),
+implemented as the copy-on-write B+-tree above, giving concurrent
+readers a consistent snapshot without ever blocking on the active
+writer. Stage 4 ("other concurrency mechanisms") extends this to
+concurrent writers, which a single evolving root pointer doesn't support
+as-is — see [backlog.md](../backlog.md).
 
-Durability doesn't get the same staging: the WAL is used from stage 1
-onward, rather than inventing a simpler ad hoc scheme first. A
-single-writer concurrency model doesn't make WAL-based recovery
-harder — if anything it's simpler than the usual case, since there's
-never more than one in-flight transaction to reconstruct at a crash
-point. MVCC remains the committed stage-4 target this ADR decides on
-for concurrency; the WAL applies starting at stage 1.
+Durability doesn't get its own staging: the WAL is used from stage 1
+onward. And because storage is versioned from stage 1, not just from
+stage 4, a crash or an aborted transaction never needs undo, at any
+stage: its pages are simply unreachable from any committed root and
+become garbage, not something to unwind. This is the same trick
+Postgres uses to avoid a WAL-based undo phase, arrived at independently
+here via copy-on-write rather than per-row versioning.
 
 ## Decision
 
 **Stage 1 (embedded core)**:
 
-- **Concurrency control**: a single global lock. One writer at a time;
-  it blocks all other readers and writers for the duration. No MVCC, no
-  concurrent readers.
+- **Concurrency control**: single-writer MVCC via a copy-on-write
+  B+-tree. One write transaction at a time — still fully serialized, no
+  write-write conflict handling needed. A write never mutates a live
+  page; it allocates new pages along the path to the root, and commit
+  is a single atomic write recording the new root as current. Readers
+  hold whichever root was current when they started and only walk pages
+  reachable from it — never blocked by the active writer, with no
+  per-row visibility bookkeeping and no transaction-status structure.
 - **Durability**: a real **write-ahead log**, in its own file separate
   from the data file ([0011](0011-embedded-config.md)'s
-  `<prefix>.log.bin`). **STEAL** and **NO-FORCE**: a dirty page may be
-  written to disk before its transaction commits, and commit only
-  requires the page's WAL record to be fsynced, not the data page
-  itself. This needs both **redo** (a committed change may exist only
-  in the WAL when a crash hits) and **undo** (an aborted or crashed
-  transaction may already have a stolen page on disk) — the same
-  logging discipline ARIES uses, though recovery itself is simpler than
-  full ARIES: with only one writer ever active, there's at most one
-  in-flight transaction to reconstruct at any crash point, so the usual
-  analysis phase (rebuilding a multi-transaction winners/losers set)
-  is trivial. Requires per-page LSNs (so redo can skip changes already
-  applied, idempotently), a checkpoint mechanism (to bound how far back
-  recovery replays), and compensation log records for undo (so a repeat
-  crash mid-undo never re-undoes the same change twice).
-- **Checkpoint mechanism**: fuzzy. Two in-memory tables — a **dirty
-  page table** (page → recLSN, the LSN at which it was first dirtied
-  since its last flush) and a **transaction table** (open transaction →
-  start LSN, chained via each log record's **prevLSN** back to that
-  transaction's previous record) — are snapshotted and written to the
-  log as the checkpoint record, without pausing new transactions; the
-  dirty pages they describe keep flushing in the background rather than
-  being forced synchronously. A checkpoint fires on whichever comes
-  first: the WAL growing past a size threshold, or a timeout since the
-  last checkpoint.
+  `<prefix>.log.bin`). **STEAL** and **NO-FORCE**: a new (uncommitted)
+  page may reach disk before its transaction commits, and commit only
+  requires the page's WAL record to be fsynced, not the page itself.
+  Needs only **redo** — no undo, because an aborted or crashed
+  transaction's pages are simply unreferenced by any committed root,
+  never requiring unwinding. Log records are **binary diffs**: since a
+  write always produces a wholly new, immutable page built from an
+  existing (also immutable) old page, the log stores the byte-level
+  diff between old and new page content, rather than either the whole
+  new page (physical) or a semantic description of the write
+  (logical/operation-level). This captures most of a semantic log's
+  space saving for routine inserts/updates, without needing
+  operation-replay logic that has to stay correct as the B+-tree
+  implementation evolves; it degrades toward whole-page size for
+  structural operations (splits/merges), where old and new page content
+  share little.
+- **Checkpoint mechanism**: fuzzy. A **dirty page table** (page →
+  recLSN, the LSN it was first dirtied at since its last flush) is
+  snapshotted and written to the log as the checkpoint record, without
+  pausing new transactions; the pages it describes keep flushing in the
+  background rather than being forced synchronously. Redo starts from
+  the minimum recLSN recorded in the latest checkpoint. No transaction
+  table is needed — recovery doesn't track which transaction was open
+  for undo purposes; it only redoes forward and finds the latest commit
+  record to know which root is actually current. No prevLSN chaining is
+  needed either, for the same reason: there's no undo to chain records
+  for.
 
 **Stage 4 ("other concurrency mechanisms")** — across both storage
 engines ([0004](0004-relational-storage-engine.md),
-[0010](0010-hierarchical-storage-engine.md)), replacing stage 1's
-concurrency mechanism:
+[0010](0010-hierarchical-storage-engine.md)):
 
-- **Concurrency control**: shared **MVCC** — one versioning/visibility
-  mechanism (transaction-ID stamping, snapshot-based visibility checks)
-  reused by both engines, even though their physical page layouts differ.
-- **Durability**: unchanged from stage 1 — the WAL adopted there is
-  already the target mechanism, shared by both engines
-  ([0004](0004-relational-storage-engine.md),
-  [0010](0010-hierarchical-storage-engine.md)) so a transaction spanning
-  both commits atomically through one log. Stage 4 only needs to extend
-  it with MVCC's versioning metadata (transaction IDs, visibility info),
-  not replace the logging mechanism itself.
+- **Concurrency control**: extend single-writer MVCC to concurrent
+  writers. The single evolving root pointer stage 1 picked doesn't
+  support that directly — two writers' independent copy-on-write
+  changes need reconciling into one next root, or the technique needs
+  to change. Not decided by this ADR (see [backlog.md](../backlog.md)).
+- **Durability**: unchanged from stage 1 — no undo is needed at stage 4
+  either, for the same reason it isn't needed at stage 1 (MVCC
+  visibility, not physical unwinding, is what hides an aborted
+  transaction's writes). Stage 4 doesn't reopen the durability design.
 
 ## Consequences
 
-- Stage 1's single global lock means zero read/write concurrency —
-  every transaction, read or write, waits its turn. That's acceptable
-  for an embedded, single-process engine finding its feet, but it's a
-  full rework, not an incremental extension, when stage 4 replaces it
-  with MVCC.
-- Stage 1's WAL, checkpointing, and undo/redo logging are real
-  implementation work up front — a meaningfully bigger lift than the
-  originally-considered "atomic page writes + fsync, no log" scheme —
-  but it means stage 4 doesn't redo the durability story later: only
-  concurrency control changes at stage 4, durability doesn't.
-- STEAL means a transaction's writeset no longer has to fit entirely in
-  the buffer pool (unlike a NO-STEAL design), at the cost of needing
-  real undo logging even for ordinary rollback (not just crash
-  recovery), since a rolled-back transaction's dirty pages may already
-  be on disk.
-- The checkpoint's transaction table only records that a transaction
-  was open *as of* the checkpoint; recovery still scans forward from
-  there to the end of the log to check whether it went on to commit
-  before the actual crash. Simpler than full multi-transaction ARIES
-  analysis, not a replacement for it.
-- Chaining every log record to its transaction's previous record via
-  prevLSN isn't needed for undo correctness at stage 1 — single-writer
-  concurrency means the log has no interleaving to disambiguate, so
-  undo could just scan backward through the whole log unaided. It's
-  included anyway so the log format doesn't need reworking once stage 4
-  allows overlapping transactions, where prevLSN chaining becomes
-  necessary rather than incidental.
-- MVCC requires multi-version storage and eventual version reclamation
-  (a Postgres-`VACUUM`-like mechanism) in both engines, once stage 4
-  lands — accepted as the cost of readers/writers never blocking each
-  other.
-- The shared visibility mechanism must support multiple exposed isolation
-  levels, not just one — [0005](0005-sql-support.md) commits to all five
-  usual levels (Read Uncommitted, Read Committed, Repeatable Read,
-  Snapshot, Serializable), configurable as a per-database server setting.
-  Read Committed and Repeatable Read need their own visibility rules
-  distinct from snapshot isolation's, and true Serializable needs
-  conflict detection beyond what snapshot visibility alone provides.
+- Single-writer MVCC gives concurrent readers from stage 1 onward — a
+  real improvement over the plain global lock originally planned — but
+  writers stay fully serialized, so stage 1 has no write-write conflict
+  question to solve, and no concurrent-writer throughput either.
+- Copy-on-write means a single-key write costs O(tree height) new
+  pages, not one — real write amplification per transaction, traded
+  against needing no transaction-status structure, no status lookups,
+  and no vacuum-style dead-tuple sweep the way per-row versioning
+  (Postgres's approach) would need.
+- No undo, at any stage: STEAL is safe without it because an aborted or
+  crashed transaction's pages are simply unreferenced by any committed
+  root — nothing to unwind, no compensation log records, no prevLSN
+  chain.
+- Old, unreferenced pages need reclaiming once no reader still holds a
+  root that reaches them — a reference-counting or epoch-based scheme,
+  not yet designed (see [backlog.md](../backlog.md)).
+- Binary diff logging saves real space for routine inserts/updates but
+  degrades toward whole-page size for structural operations
+  (splits/merges), where old and new page content share little.
+- Stage 4's move to concurrent writers is a genuine open problem, not
+  just "turn on more concurrency" — reconciling independent
+  copy-on-write changes into one next root (or moving away from a
+  single root pointer) needs its own decision (see
+  [backlog.md](../backlog.md)).
+- Tree-snapshot readers already get a fully consistent, unchanging view
+  of the whole database for the duration of their transaction, from
+  stage 1 onward — in tension with [0005](0005-sql-support.md)'s
+  framing that isolation is moot until MVCC lands at stage 4, since this
+  may already amount to Snapshot isolation (or better) before then. Not
+  resolved here — flagged in [backlog.md](../backlog.md).
 - A single shared WAL means transaction atomicity across both engines
   comes for free, but couples their recovery paths together — a
   corruption/bug in one engine's log records affects crash recovery for
