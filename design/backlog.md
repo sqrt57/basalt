@@ -63,7 +63,9 @@ raised and set aside without a commitment either way.
   level, memory/cache limits, sync/fsync policy, read-only mode, and
   anything else the embedded builder/options should expose. Only file
   location (path prefix) is decided so far
-  ([0011](decisions/0011-embedded-config.md)).
+  ([0011](decisions/0011-embedded-config.md)). Deliberately left open,
+  not blocking stage 1 — to be settled during stage-1 implementation
+  itself rather than pre-decided here.
 - **Server's own config file location** — default path next to the
   executable, a CLI flag pointing at it, or something else. Not decided
   ([0012](decisions/0012-server-config.md)).
