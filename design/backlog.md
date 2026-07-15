@@ -66,6 +66,15 @@ raised and set aside without a commitment either way.
   ([0011](decisions/0011-embedded-config.md)). Deliberately left open,
   not blocking stage 1 — to be settled during stage-1 implementation
   itself rather than pre-decided here.
+- **Minimum/maximum allowed page size bounds** — page size is
+  per-database and stored in the preamble
+  ([0015](decisions/0015-page-storage-format.md)), but what values are
+  actually valid (power-of-two only? a floor/ceiling?) isn't decided.
+  Doesn't block starting stage-1 chunk 1.
+- **Total page count storage** — derived from data-file length at open
+  time, or stored explicitly in page 0 alongside the free-list head
+  ([0015](decisions/0015-page-storage-format.md))? Not decided; doesn't
+  block starting stage-1 chunk 1.
 - **Server's own config file location** — default path next to the
   executable, a CLI flag pointing at it, or something else. Not decided
   ([0012](decisions/0012-server-config.md)).

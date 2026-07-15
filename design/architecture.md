@@ -138,6 +138,13 @@ data, one shared page allocator) and `<prefix>.log.bin` (the shared
 WAL). No directory convention, no per-engine file.
 ([0011](decisions/0011-embedded-config.md))
 
+`<prefix>.data.bin` itself starts with a fixed 64-byte preamble (magic
+bytes, format/version, page size), read before any page-sized I/O is
+possible; page size is chosen per database at creation and immutable
+after. Page 0 immediately follows the preamble and holds the free-list
+head; free pages are threaded into a singly-linked list among
+themselves. ([0015](decisions/0015-page-storage-format.md))
+
 ## Server Configuration
 
 A TOML config file lists the databases a server process hosts — each a

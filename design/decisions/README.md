@@ -18,3 +18,4 @@ for implementation questions these ADRs left open.
 - [0012 — Server Configuration](0012-server-config.md)
 - [0013 — Page/Version Reclamation](0013-page-reclamation.md)
 - [0014 — Crate Layout](0014-crate-layout.md)
+- [0015 — Page Storage Format: Preamble, Page Size, Free-List](0015-page-storage-format.md)
