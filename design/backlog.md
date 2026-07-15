@@ -22,15 +22,15 @@ raised and set aside without a commitment either way.
   Web ([0006](decisions/0006-admin-dev-client.md)) are both unstaged
   past [roadmap.md](roadmap.md) stage 4; their relative order isn't
   decided.
-- **Page/version reclamation** — once no reader still holds a root that
-  reaches an old, unreferenced copy-on-write page, it needs reclaiming
-  ([0008](decisions/0008-concurrency-durability.md)). A
-  reference-counting or epoch-based scheme is implied but not designed.
 - **Stage-4 concurrent-writer mechanism** — stage 1's single evolving
   root pointer ([0008](decisions/0008-concurrency-durability.md))
   doesn't support concurrent writers as-is; reconciling independent
   copy-on-write changes into one next root (or moving away from a
-  single root pointer) isn't decided.
+  single root pointer) isn't decided. If root history stops being
+  linear, stage 1's low-water-mark page reclamation
+  ([0013](decisions/0013-page-reclamation.md)) stops working too and
+  would need to move to per-page refcounting or another scheme — also
+  not decided.
 - **Isolation-level framing may need revisiting** — stage 1's
   tree-snapshot readers already get a fully consistent, unchanging view
   of the database for their whole transaction

@@ -59,11 +59,18 @@ snapshot visibility, never blocked by the active writer. A real
 from the data file ([0011](decisions/0011-embedded-config.md)) —
 STEAL/NO-FORCE, redo-only (no undo: an aborted or crashed transaction's
 pages are simply unreferenced by any committed root), binary-diff log
-records, fuzzy checkpointing. Both storage engines later extend this to
-**concurrent writers** — a genuine open problem, not just "more
-concurrency," since a single evolving root pointer doesn't support it
-as-is — once that later stage (roadmap stage 4) lands; durability is
-unchanged at that point.
+records, fuzzy checkpointing. Old pages superseded by copy-on-write
+writes are reclaimed via a low-water mark over an in-memory reader
+table (the oldest active reader's snapshot generation), riding the
+checkpoint pass's cadence rather than a separate mechanism — viable
+because stage 1's root history is strictly linear; a long-running
+reader can starve reclamation indefinitely, accepted as a stage-1
+tradeoff. ([0013](decisions/0013-page-reclamation.md)) Both storage
+engines later extend this to **concurrent writers** — a genuine open
+problem, not just "more concurrency," since a single evolving root
+pointer doesn't support it as-is, and reclamation would need to change
+too once root history stops being linear — once that later stage
+(roadmap stage 4) lands; durability is unchanged at that point.
 ([0008](decisions/0008-concurrency-durability.md))
 
 ## Query Execution

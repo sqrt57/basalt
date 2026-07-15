@@ -16,3 +16,4 @@ for implementation questions these ADRs left open.
 - [0010 — Hierarchical Storage Engine](0010-hierarchical-storage-engine.md)
 - [0011 — Embedded Configuration: DB File Layout](0011-embedded-config.md)
 - [0012 — Server Configuration](0012-server-config.md)
+- [0013 — Page/Version Reclamation](0013-page-reclamation.md)
