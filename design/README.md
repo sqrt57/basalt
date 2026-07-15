@@ -8,6 +8,8 @@
 - [roadmap.md](roadmap.md) — build order/sequencing derived from the
   proposed architecture. A plan, not a decision — can reorder without an
   ADR changing.
+- [stage1-plan.md](stage1-plan.md) — implementable chunk breakdown for
+  roadmap stage 1. A plan, not a decision.
 - [decisions/](decisions/) — ADRs recording each proposal as it's made,
   with the full context and reasoning behind it. See
   [decisions/README.md](decisions/README.md) for the index.

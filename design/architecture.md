@@ -146,6 +146,22 @@ A TOML config file lists the databases a server process hosts — each a
 server executable's own directory — plus the listen address/port.
 ([0012](decisions/0012-server-config.md))
 
+## Crate Layout
+
+A Cargo workspace: `basalt-engine` (the embedded core — storage engines,
+MVCC/WAL, SQL, execution; no networking) is the only crate stage 1 needs.
+`basalt-proto` (wire protocol types) and `basalt-server`/`basalt-client`
+(server binary and native Rust client library) are reserved slots that
+fill in at stage 3. `basalt-client-core` holds the logic shared by all
+four unified-client interface forms and is the seam that lets them run
+in-process (stage 2, against `basalt-engine` directly) or networked
+(stage 3+, against `basalt-client`) without duplicating client logic;
+`basalt-cli`/`basalt-tui`/`basalt-gui` are thin binaries wiring that core
+to their respective toolkits. The web frontend itself lives in its own
+crate, `basalt-web-ui`, consumed both by `basalt-gui`'s webview and by
+`basalt-server`'s bundled web console.
+([0014](decisions/0014-crate-layout.md))
+
 See [roadmap.md](roadmap.md) for build order/sequencing derived from
 these decisions.
 

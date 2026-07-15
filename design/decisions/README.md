@@ -17,3 +17,4 @@ for implementation questions these ADRs left open.
 - [0011 — Embedded Configuration: DB File Layout](0011-embedded-config.md)
 - [0012 — Server Configuration](0012-server-config.md)
 - [0013 — Page/Version Reclamation](0013-page-reclamation.md)
+- [0014 — Crate Layout](0014-crate-layout.md)
