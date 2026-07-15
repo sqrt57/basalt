@@ -41,6 +41,27 @@ contenders discussed, per near-universal precedent (Postgres, SQL
 Server, MySQL/InnoDB). Given MVCC is shared, a single shared WAL follows
 naturally — a transaction spanning both engines needs one atomic
 durability boundary, not coordination between two independent logs.
+Going log-free instead (LMDB-style: no WAL at all, just two alternating
+meta-pages holding the current root, recovery picks whichever has the
+higher valid transaction ID) was considered and rejected — it's a valid
+approach for the same copy-on-write storage model, but a WAL is kept
+here for the redo/checkpoint machinery it gives independent of the
+storage engine's own page structure.
+
+**Log record format**: for the copy-on-write pages this ADR uses,
+records are **binary diffs** between old and new page content (see
+Decision), not whole-page images or operation-level descriptions.
+Classic **physiological** logging (ARIES/Postgres/InnoDB-style: physical
+page addressing plus a logical description of the in-page change) is
+the usual middle ground between those two, but its actual purpose —
+tolerating a page's physical layout drifting between when a record was
+logged and when it's replayed — doesn't apply here: copy-on-write pages
+are immutable once written, so there's no drift to tolerate. The
+comparable "smaller than whole-page" alternative for this storage model
+would be genuinely logical/operation-replay logging, not physiological;
+binary diffs were chosen instead since they get most of the same space
+saving without needing replay logic that has to track the B+-tree
+implementation's evolution.
 
 **Staging**: full MVCC — concurrent writers, write-write conflict
 handling, the five-level isolation buildup — is nontrivial, and the
