@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Basalt (code name) is a database engine, in the design stage overall but
 now mid-implementation of [roadmap.md](design/roadmap.md) stage 1 (the
 embedded core) per [stage1-plan.md](design/stage1-plan.md)'s chunk list
-— chunks 1 (page storage) and 2 (copy-on-write B+-tree) are done, in the
-`engine` crate. See [design/README.md](design/README.md) for the design
+— chunks 1 (page storage), 2 (copy-on-write B+-tree), and 3 (WAL + redo
+recovery) are done, in the `engine` crate. See
+[design/README.md](design/README.md) for the design
 docs index (proposed architecture, open questions, build order, and the
 ADRs); it's the entry point for design questions, not this file.
 
