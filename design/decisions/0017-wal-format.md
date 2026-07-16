@@ -57,8 +57,13 @@ next free LSN.
 
 - header: `payload_len: u32` (LE), `record_type: u8`
 - payload: exactly `payload_len` bytes
-- trailer: `checksum: u32` (LE) — CRC-32 (IEEE) over the `record_type`
-  byte followed by the payload bytes
+- trailer: `checksum: u32` (LE) — CRC-32C (Castagnoli) over the
+  `record_type` byte followed by the payload bytes. Castagnoli over the
+  classic IEEE polynomial: better error detection at the record lengths
+  a WAL actually sees, and hardware-accelerated on both platforms this
+  project targets (x86_64 SSE4.2 `crc32`, ARMv8 CRC32C) — the same
+  choice Postgres, RocksDB/LevelDB, btrfs, ext4, and iSCSI made for the
+  same reason.
 
 Recovery reads records sequentially from offset 64. If the header can't
 be fully read, or the payload+trailer can't be fully read, or the
@@ -165,8 +170,13 @@ once the following checkpoint's fsync catches up to them.
   cell) as one large range spanning all of them. Acceptable for
   correctness-first chunk 3 scope; revisit if log size becomes a
   concern (see [backlog.md](../backlog.md)).
-- CRC-32 per record is what makes a torn tail after a crash
+- CRC-32C per record is what makes a torn tail after a crash
   distinguishable from a valid record at all — without it, a
   partially-written last record could be misread as well-formed,
   silently corrupting the recovered root or a page's content instead of
-  being cleanly dropped.
+  being cleanly dropped. This only needs to answer one binary question
+  per record ("did this survive the crash intact") on records that are
+  at most page-sized — no need for a wider checksum (CRC-64, xxHash64,
+  a cryptographic hash), which would trade cost for protecting against
+  threats (long-term bit-rot across large blocks, adversarial
+  tampering) that don't apply to a local embedded WAL file.
