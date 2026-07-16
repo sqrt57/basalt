@@ -22,10 +22,11 @@ Roughly bottom-up; each chunk depends on the ones before it.
    Acceptance criteria:
    - Creating a new database at a path prefix produces
      `<prefix>.data.bin` with a valid 64-byte preamble (magic, version,
-     page size) and an empty page-0 allocator state.
+     page size) occupying all of page-size-aligned page 0, and an empty
+     page-1 allocator state.
    - Opening an existing file reads the preamble first (fixed-size read,
      independent of page size), validates magic/version, then locates
-     page 0 to restore the free-list head. Corrupt/unrecognized magic is
+     page 1 to restore the free-list head. Corrupt/unrecognized magic is
      a reported error.
    - Page size is a creation-time parameter, immutable thereafter;
      opening a file uses whatever page size is stored, never a

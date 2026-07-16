@@ -141,8 +141,11 @@ WAL). No directory convention, no per-engine file.
 `<prefix>.data.bin` itself starts with a fixed 64-byte preamble (magic
 bytes, format/version, page size), read before any page-sized I/O is
 possible; page size is chosen per database at creation and immutable
-after. Page 0 immediately follows the preamble and holds the free-list
-head; free pages are threaded into a singly-linked list among
+after. The preamble occupies the whole of page 0 (zero-padded past its
+64 bytes), keeping every page in the file aligned to a `page_size`
+multiple from offset 0 — page *n* begins at `n * page_size`, no separate
+preamble offset term. Page 1 immediately follows and holds the
+free-list head; free pages are threaded into a singly-linked list among
 themselves. ([0015](decisions/0015-page-storage-format.md))
 
 Allocated pages hold a copy-on-write B+-tree: a slotted-page node
