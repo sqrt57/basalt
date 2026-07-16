@@ -45,3 +45,13 @@ first (see chunks 1 and 2 for the pattern), sync the docs per step 2
 above, then implement and test. Commit as two separate commits — the
 decision/docs first, the implementation second — rather than one
 combined commit.
+
+## Test organization
+
+Tests stay as inline `#[cfg(test)] mod tests` in the same file as the
+code under test, not a top-level `tests/` directory — several tests
+(e.g. `engine.rs`'s WAL crash-recovery tests) need private-field access
+to simulate a crash mid-transaction, which a `tests/` integration test
+can't get since it only sees the crate's public API. Revisit once
+chunk 8 (embedded API) gives the crate a real public surface — that's
+what chunk 9 ("Integration") is for.
