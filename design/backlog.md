@@ -102,6 +102,24 @@ raised and set aside without a commitment either way.
   explicit call or clean close, no background size/timeout trigger
   ([0017](decisions/0017-wal-format.md)), since stage 1 has no
   background-task mechanism yet. Revisit once one exists.
+- **Free-list crash safety** — `Pager::free_page`/`allocate_page`
+  ([0015](decisions/0015-page-storage-format.md)) write the free-list
+  chain directly to the data file with no WAL logging and no fsync. A
+  torn write there (e.g. a partially-written next-pointer) could in
+  principle corrupt the chain and later hand out a still-live page as
+  "free," which is a correctness bug, not just a delayed reclaim. This
+  went mostly unexercised through chunks 1-3 (nothing on the normal
+  commit path called `free_page`); chunk 4's reclamation
+  ([0018](decisions/0018-mvcc-snapshot-format.md)) is the first caller
+  in the main flow. Deferred rather than fixed as part of chunk 4 — not
+  designed yet.
+- **Reader/writer thread-concurrency model** — [0018](decisions/0018-mvcc-snapshot-format.md)
+  gives stage 1 logically-interleaved snapshot reads on one `&mut
+  Database` handle (a writer can commit between two reads through the
+  same open snapshot), not readers and a writer executing on separate OS
+  threads simultaneously — the pager isn't `Sync` and nothing is locked.
+  Whether stage 1 (or a later stage) ever needs true multi-threaded
+  concurrent access, and what that would take, isn't decided.
 - **WAL diff compression quality** — chunk 3's diff algorithm is a
   single common-prefix/common-suffix trim, which over-logs routine
   inserts that touch disjoint regions of a node

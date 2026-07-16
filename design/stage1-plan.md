@@ -129,7 +129,45 @@ Roughly bottom-up; each chunk depends on the ones before it.
    table, transaction begin/commit/abort, snapshot-isolated readers,
    low-water-mark reclamation riding the checkpoint pass
    ([0008](decisions/0008-concurrency-durability.md),
-   [0013](decisions/0013-page-reclamation.md)).
+   [0013](decisions/0013-page-reclamation.md),
+   [0018](decisions/0018-mvcc-snapshot-format.md)).
+
+   Acceptance criteria:
+   - `begin_read()` taken before a write transaction commits, then read
+     from (via the `_at` methods) after that transaction commits,
+     returns the pre-commit snapshot unchanged — matching chunk 2's COW
+     guarantee but now exercised through the reader-table/generation
+     machinery instead of a raw remembered `PageId`.
+   - Multiple `Snapshot`s taken at different points across several
+     commits each independently see their own point-in-time data when
+     read from in any order/interleaving — a later snapshot is never
+     missing data an earlier one has, and an earlier one never sees a
+     later snapshot's writes.
+   - A transaction whose closure returns `Err` (abort) leaves
+     `current_generation` unchanged, the pre-abort root still current,
+     and produces no new entries in the pending-reclaim list — the
+     newly-written (now-orphaned) pages are simply never reclaimed by
+     this scheme, same as an unrecovered crash.
+   - After a write transaction commits with no `Snapshot` ever taken,
+     a `checkpoint()` call reclaims (frees) every page that commit
+     superseded: a subsequent `allocate_page()` reuses one of their page
+     numbers rather than growing the file.
+   - A page superseded while a `Snapshot` is still open (taken before
+     that supersession) is *not* freed by `checkpoint()` while that
+     snapshot remains open, even across multiple further commits and
+     checkpoints; once `end_read` releases that snapshot, the next
+     `checkpoint()` call does reclaim it.
+   - Two overlapping snapshots at different generations: reclamation
+     only frees pages superseded at or before the *older* snapshot's
+     generation (the low-water mark), never pages still reachable from
+     either open snapshot.
+   - Explicit non-goals for this chunk: no concurrent writers, no
+     per-page reference counting (both deferred past stage 1's linear
+     root history per [0013](decisions/0013-page-reclamation.md)), no
+     fix for the free-list's own crash-safety gap this chunk starts
+     exercising (see [backlog.md](backlog.md)), no thread-level
+     concurrent execution (readers and the writer are still
+     interleaved on one handle, not parallel across OS threads).
 5. **Row store** — tuple encoding, table/schema catalog, on top of the
    tree from chunks 2-4; exposes the scan/seek iterator interface
    ([0004](decisions/0004-relational-storage-engine.md)).

@@ -165,6 +165,22 @@ scans the whole log forward and stops cleanly at the first torn/corrupt
 record; the current root is whichever `Commit` was seen last.
 ([0017](decisions/0017-wal-format.md))
 
+A reader transaction is a lightweight `Snapshot` token (its generation
+and root, `Copy`), not a live borrow — reads go through `Database`
+methods taking `&mut self` plus the token, re-acquiring the pager each
+call rather than holding it for the snapshot's whole lifetime, so a
+writer can commit in between two reads made through the same open
+snapshot. Generations are an in-memory `u64` counter, incremented once
+per commit and never persisted; a `BTreeMap<generation, open_count>`
+reader table gives the low-water mark as its minimum key. Pages a
+transaction's writes superseded are collected provisionally and only
+folded into the durable pending-reclaim list, tagged with the new
+generation, on that transaction's successful commit — discarded outright
+on abort, since an aborted transaction never actually superseded
+anything. The checkpoint pass reclaims (frees) whatever in that list
+falls at or below the current low-water mark.
+([0018](decisions/0018-mvcc-snapshot-format.md))
+
 ## Server Configuration
 
 A TOML config file lists the databases a server process hosts — each a

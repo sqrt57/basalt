@@ -21,3 +21,4 @@ for implementation questions these ADRs left open.
 - [0015 — Page Storage Format: Preamble, Page Size, Free-List](0015-page-storage-format.md)
 - [0016 — Copy-on-Write B+-Tree: Node Format & Mutation Semantics](0016-btree-node-format.md)
 - [0017 — WAL Format: Log Records, LSN, and Redo Recovery](0017-wal-format.md)
+- [0018 — MVCC Snapshots: Generations, Reader Table, Reclamation Wiring](0018-mvcc-snapshot-format.md)
