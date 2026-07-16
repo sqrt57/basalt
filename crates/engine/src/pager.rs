@@ -7,12 +7,22 @@ use std::path::{Path, PathBuf};
 
 pub type PageId = u64;
 
-const PREAMBLE_SIZE: u64 = 64;
+/// Size of the fixed, page-size-independent read used to learn `page_size`
+/// itself before any page-aligned offset can be computed. Not the size of
+/// a page — the preamble *content* fits in this many bytes, but it's
+/// zero-padded out to fill all of page 0 (`design/decisions/0015-page-storage-format.md`).
+const PREAMBLE_READ_SIZE: u64 = 64;
 const MAGIC: &[u8; 8] = b"BSLTPAGE";
 const FORMAT_VERSION: u32 = 1;
 const FREE_LIST_NONE: u64 = u64::MAX;
-/// A free page's next-pointer is a `u64`, so a page must be at least this big.
-const MIN_PAGE_SIZE: u32 = 8;
+/// Page 0 holds the preamble, page 1 the free-list head; allocatable pages
+/// start here.
+const FIRST_ALLOCATABLE_PAGE: u64 = 2;
+const ALLOCATOR_PAGE: PageId = 1;
+/// The preamble's 64 content bytes must fit within page 0 itself now that
+/// it's page-aligned, so page size can't go below that floor (see
+/// `design/decisions/0015-page-storage-format.md`'s revision note).
+const MIN_PAGE_SIZE: u32 = PREAMBLE_READ_SIZE as u32;
 
 #[derive(Debug)]
 pub enum PagerError {
@@ -85,22 +95,25 @@ impl Pager {
             .create_new(true)
             .open(data_file_path(path_prefix))?;
 
-        let mut preamble = [0u8; PREAMBLE_SIZE as usize];
-        preamble[0..8].copy_from_slice(MAGIC);
-        preamble[8..12].copy_from_slice(&FORMAT_VERSION.to_le_bytes());
-        preamble[12..16].copy_from_slice(&page_size.to_le_bytes());
-        file.write_all(&preamble)?;
-
-        // Page 0: allocator state. First 8 bytes are the free-list head
-        // (empty), the rest of the page is reserved/unused for now.
+        // Page 0: preamble, zero-padded out to a full page so every page
+        // after it — including this one — is aligned to a page_size
+        // multiple from file offset 0.
         let mut page0 = vec![0u8; page_size as usize];
-        page0[0..8].copy_from_slice(&FREE_LIST_NONE.to_le_bytes());
+        page0[0..8].copy_from_slice(MAGIC);
+        page0[8..12].copy_from_slice(&FORMAT_VERSION.to_le_bytes());
+        page0[12..16].copy_from_slice(&page_size.to_le_bytes());
         file.write_all(&page0)?;
+
+        // Page 1: allocator state. First 8 bytes are the free-list head
+        // (empty), the rest of the page is reserved/unused for now.
+        let mut page1 = vec![0u8; page_size as usize];
+        page1[0..8].copy_from_slice(&FREE_LIST_NONE.to_le_bytes());
+        file.write_all(&page1)?;
 
         Ok(Pager {
             file,
             page_size,
-            page_count: 1,
+            page_count: FIRST_ALLOCATABLE_PAGE,
             free_list_head: FREE_LIST_NONE,
         })
     }
@@ -113,7 +126,7 @@ impl Pager {
             .write(true)
             .open(data_file_path(path_prefix))?;
 
-        let mut preamble = [0u8; PREAMBLE_SIZE as usize];
+        let mut preamble = [0u8; PREAMBLE_READ_SIZE as usize];
         file.read_exact(&mut preamble)?;
         if &preamble[0..8] != MAGIC {
             return Err(PagerError::BadMagic);
@@ -128,7 +141,7 @@ impl Pager {
         }
 
         let file_len = file.metadata()?.len();
-        let page_count = (file_len - PREAMBLE_SIZE) / page_size as u64;
+        let page_count = file_len / page_size as u64;
 
         let mut pager = Pager {
             file,
@@ -159,7 +172,7 @@ impl Pager {
             return Ok(());
         }
         let new_count = page_id + 1;
-        let new_len = PREAMBLE_SIZE + new_count * self.page_size as u64;
+        let new_len = new_count * self.page_size as u64;
         self.file.set_len(new_len)?;
         self.page_count = new_count;
         Ok(())
@@ -185,7 +198,7 @@ impl Pager {
         }
 
         let page_id = self.page_count;
-        let new_len = PREAMBLE_SIZE + (page_id + 1) * self.page_size as u64;
+        let new_len = (page_id + 1) * self.page_size as u64;
         self.file.set_len(new_len)?;
         self.page_count += 1;
         Ok(page_id)
@@ -224,18 +237,18 @@ impl Pager {
     }
 
     fn read_free_list_head(&mut self) -> Result<u64, PagerError> {
-        self.read_next_pointer(0)
+        self.read_next_pointer(ALLOCATOR_PAGE)
     }
 
     fn set_free_list_head(&mut self, head: u64) -> Result<(), PagerError> {
         self.free_list_head = head;
-        self.seek_to(0)?;
+        self.seek_to(ALLOCATOR_PAGE)?;
         self.file.write_all(&head.to_le_bytes())?;
         Ok(())
     }
 
     /// Reads the first 8 bytes of `page_id` as a `u64` free-list pointer.
-    /// Used both for page 0's free-list head and for a free page's next
+    /// Used both for page 1's free-list head and for a free page's next
     /// pointer, which share the same "first 8 bytes" convention.
     fn read_next_pointer(&mut self, page_id: PageId) -> Result<u64, PagerError> {
         self.seek_to(page_id)?;
@@ -245,7 +258,7 @@ impl Pager {
     }
 
     fn seek_to(&mut self, page_id: PageId) -> Result<(), PagerError> {
-        let offset = PREAMBLE_SIZE + page_id * self.page_size as u64;
+        let offset = page_id * self.page_size as u64;
         self.file.seek(SeekFrom::Start(offset))?;
         Ok(())
     }
@@ -294,11 +307,11 @@ mod tests {
         {
             let pager = Pager::create(&p, 256).unwrap();
             assert_eq!(pager.page_size(), 256);
-            assert_eq!(pager.page_count(), 1);
+            assert_eq!(pager.page_count(), 2); // page 0 (preamble) + page 1 (allocator)
         }
         let pager = Pager::open(&p).unwrap();
         assert_eq!(pager.page_size(), 256);
-        assert_eq!(pager.page_count(), 1);
+        assert_eq!(pager.page_count(), 2);
     }
 
     #[test]
@@ -373,7 +386,7 @@ mod tests {
         let a = pager.allocate_page().unwrap();
         let b = pager.allocate_page().unwrap();
         assert_ne!(a, b);
-        assert_eq!(pager.page_count(), 3); // page 0 (allocator) + a + b
+        assert_eq!(pager.page_count(), 4); // page 0 (preamble) + page 1 (allocator) + a + b
     }
 
     #[test]
@@ -444,5 +457,38 @@ mod tests {
         let mut buf = vec![0u8; 64];
         // Defined-but-unspecified content: must not error, value not asserted.
         assert!(pager.read_page(id, &mut buf).is_ok());
+    }
+
+    #[test]
+    fn pages_are_aligned_to_page_size_multiples_from_file_start() {
+        let dir = tempdir().unwrap();
+        let p = prefix(dir.path(), "db");
+        let page_size: u32 = 128;
+        let written: Vec<u8> = (0..page_size as u8).collect();
+        let id;
+        {
+            let mut pager = Pager::create(&p, page_size).unwrap();
+            id = pager.allocate_page().unwrap();
+            pager.write_page(id, &written).unwrap();
+        }
+
+        // Read the raw file directly at `id * page_size` and confirm it's
+        // exactly the page written — not at `64 + id * page_size`, which is
+        // what an unaligned preamble would have put it at instead.
+        let mut file = std::fs::File::open(data_file_path(&p)).unwrap();
+        file.seek(SeekFrom::Start(id * page_size as u64)).unwrap();
+        let mut raw = vec![0u8; page_size as usize];
+        file.read_exact(&mut raw).unwrap();
+        assert_eq!(raw, written);
+
+        // The preamble's magic bytes sit at the very start of the file,
+        // i.e. page 0, not at some earlier region.
+        let mut magic = [0u8; 8];
+        let mut file = std::fs::File::open(data_file_path(&p)).unwrap();
+        file.read_exact(&mut magic).unwrap();
+        assert_eq!(&magic, MAGIC);
+
+        // File length itself is an exact multiple of page_size.
+        assert_eq!(std::fs::metadata(data_file_path(&p)).unwrap().len() % page_size as u64, 0);
     }
 }

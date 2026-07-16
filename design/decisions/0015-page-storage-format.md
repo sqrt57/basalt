@@ -107,6 +107,14 @@ starts at a clean `n * page_size` with no offset term at all.
 - Reserving two pages (0 and 1) instead of one before allocatable data
   starts is a two-page fixed cost per database, paid once — negligible
   next to any real page size.
+- The preamble's 64 content bytes must now fit *within* page 0 rather
+  than occupying their own independent region, so the minimum page size
+  floor rises from 8 (driven only by the free-list next-pointer's 8
+  bytes) to 64 — otherwise the "deliberately generous headroom" framing
+  above is false for small page sizes. This isn't a new minimum/maximum
+  page-size *policy* decision (still open, see
+  [backlog.md](../backlog.md)), just the floor this revision's own
+  layout requires to stay internally consistent.
 - This format is scoped to chunk 1 only: no crash safety (chunk 3's
   WAL), no concurrent access (chunk 4's MVCC), no tree-structure
   interpretation of page contents (chunk 2+). A page, at this layer, is
