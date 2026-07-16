@@ -93,6 +93,20 @@ raised and set aside without a commitment either way.
   ([0016](decisions/0016-btree-node-format.md)). Whether the row store
   (chunk 5+) needs an overflow-chain mechanism for large values, or can
   get away with a hard size ceiling, isn't decided.
+- **Checkpoint-accelerated redo start** — chunk 3's recovery always
+  scans the WAL from the start ([0017](decisions/0017-wal-format.md));
+  using the latest checkpoint's dirty-page table to start later needs a
+  durable pointer to that checkpoint's own LSN somewhere recovery can
+  find without itself scanning the whole log. Not designed yet.
+- **Automatic checkpoint triggering** — chunk 3 only checkpoints on an
+  explicit call or clean close, no background size/timeout trigger
+  ([0017](decisions/0017-wal-format.md)), since stage 1 has no
+  background-task mechanism yet. Revisit once one exists.
+- **WAL diff compression quality** — chunk 3's diff algorithm is a
+  single common-prefix/common-suffix trim, which over-logs routine
+  inserts that touch disjoint regions of a node
+  ([0017](decisions/0017-wal-format.md)). The record format supports
+  multiple ranges for a smarter algorithm later; not designed yet.
 - **Publish-time crate/package naming** — `basalt`, `basalt-cli`, and
   `basalt-tui` are already taken on crates.io (an unrelated Vulkan UI
   framework and its sub-crates); `basalt-proto`, `basalt-server`,

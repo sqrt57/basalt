@@ -86,7 +86,45 @@ Roughly bottom-up; each chunk depends on the ones before it.
 3. **WAL + redo recovery** — `<prefix>.log.bin`, binary-diff records,
    fuzzy checkpoint with dirty-page table, wiring writes from chunk 2
    through the log ([0008](decisions/0008-concurrency-durability.md),
-   [0011](decisions/0011-embedded-config.md)).
+   [0011](decisions/0011-embedded-config.md),
+   [0017](decisions/0017-wal-format.md)).
+
+   Acceptance criteria:
+   - A transaction (a sequence of chunk-2 tree writes) that commits,
+     followed by a clean close and reopen, replays the log on open and
+     recovers the same root: lookups and range-scans after reopen match
+     the pre-close state exactly.
+   - Multiple committed transactions in sequence, then close/reopen:
+     recovery lands on the *last* commit's root, and data from every
+     one of those transactions (not just the final one) is visible —
+     proving redo doesn't stop early or pick a stale commit.
+   - A transaction whose `PageDiff` records were appended but whose
+     `Commit` record was never appended (simulating a crash mid-write,
+     e.g. by truncating the log file after the last complete
+     `PageDiff`) leaves that transaction's writes invisible after
+     recovery — the recovered root is whatever it was before that
+     transaction began.
+   - A torn tail — extra bytes appended after the last valid record
+     that don't form a complete, well-framed record — doesn't prevent
+     recovery from completing, and doesn't affect the data recovered
+     from everything before it. Covers both a truncated
+     header/payload/trailer and a complete-but-corrupted record (a
+     flipped byte inside an otherwise well-framed record, caught by
+     its checksum) — both are treated as end-of-log, not an error.
+   - A checkpoint call (explicit, or the one taken on clean close)
+     produces a `Checkpoint` record and fsyncs the data file; recovery
+     across a commit-checkpoint-commit-crash sequence still recovers
+     correctly (checkpointing doesn't block or corrupt subsequent
+     transactions' recovery, even though chunk 3 doesn't yet use the
+     checkpoint to shortcut the redo scan).
+   - Running recovery twice with no intervening writes (e.g. open,
+     clean close, reopen again) is idempotent: same root, same data,
+     both times.
+   - Explicit non-goals for this chunk: no MVCC root *history*/multiple
+     generations (chunk 4), no page reclamation (chunk 4), no
+     concurrent readers or writers (still single-writer), no automatic/
+     background checkpoint triggering, no checkpoint-accelerated redo
+     start (see [backlog.md](backlog.md)).
 4. **MVCC snapshots + reclamation** — root history, in-memory reader
    table, transaction begin/commit/abort, snapshot-isolated readers,
    low-water-mark reclamation riding the checkpoint pass

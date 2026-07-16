@@ -155,6 +155,16 @@ back down the tree. The tree's root is tracked only by the in-process
 handle for now, not persisted anywhere durable.
 ([0016](decisions/0016-btree-node-format.md))
 
+`<prefix>.log.bin` gives that root a durable recovery path: a 64-byte
+preamble like the data file's, then a sequence of checksummed records
+(LSN = a record's own file offset) — `PageDiff` (a base page plus
+changed byte ranges, redoing one newly-allocated page), `Commit` (the
+new root, durable once its record is fsynced), and `Checkpoint` (a
+dirty-page-table snapshot, fsyncing the data file behind it). Redo
+scans the whole log forward and stops cleanly at the first torn/corrupt
+record; the current root is whichever `Commit` was seen last.
+([0017](decisions/0017-wal-format.md))
+
 ## Server Configuration
 
 A TOML config file lists the databases a server process hosts — each a
