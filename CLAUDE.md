@@ -4,23 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Basalt (code name) is a database engine in the pre-implementation design
-stage — no source code, build system, or test suite yet, just licensing
-and design material. See [design/README.md](design/README.md) for the
-design docs index (currently proposed architecture, open questions,
-build order, and the ADRs); it's the entry point, not this file.
+Basalt (code name) is a database engine, in the design stage overall but
+now mid-implementation of [roadmap.md](design/roadmap.md) stage 1 (the
+embedded core) per [stage1-plan.md](design/stage1-plan.md)'s chunk list
+— chunks 1 (page storage) and 2 (copy-on-write B+-tree) are done, in the
+`engine` crate. See [design/README.md](design/README.md) for the design
+docs index (proposed architecture, open questions, build order, and the
+ADRs); it's the entry point for design questions, not this file.
 
 Store AI-generated design docs under `design/`.
 
-There are no build/lint/test commands to document yet. When
-implementation begins, this file should be updated with the actual
-Cargo commands and the real crate/module architecture once code exists
-— do not invent these before they exist.
+A Cargo workspace at the repo root, one member so far: `crates/engine`
+(edition 2024). Standard commands from the repo root:
+
+- `cargo build` / `cargo check`
+- `cargo test`
+- `cargo clippy --all-targets`
 
 ## Working on this repo right now
 
-Most work at this stage is design discussion, not code. Before writing
-any code:
+Design work precedes code, not the other way round. Before writing any
+code:
 
 1. Check `design/architecture.md` for whether the relevant area (scope,
    platform, architecture, SQL dialect, wire protocol, client tooling)
