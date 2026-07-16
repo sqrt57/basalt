@@ -145,6 +145,16 @@ after. Page 0 immediately follows the preamble and holds the free-list
 head; free pages are threaded into a singly-linked list among
 themselves. ([0015](decisions/0015-page-storage-format.md))
 
+Allocated pages hold a copy-on-write B+-tree: a slotted-page node
+format (byte-string keys/values, no fixed fanout, no overflow pages),
+where a write decodes the affected node, re-encodes it into a newly
+allocated page, and threads the new child pointer up through freshly
+copied ancestors to a new root — old pages are left untouched. No
+leaf-sibling pointers; range-scan instead walks a cursor stack up and
+back down the tree. The tree's root is tracked only by the in-process
+handle for now, not persisted anywhere durable.
+([0016](decisions/0016-btree-node-format.md))
+
 ## Server Configuration
 
 A TOML config file lists the databases a server process hosts — each a

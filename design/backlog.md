@@ -82,6 +82,17 @@ raised and set aside without a commitment either way.
   from the TOML file ([0012](decisions/0012-server-config.md)) can be
   overridden by CLI flags or env vars, and their precedence if so. Not
   decided.
+- **B+-tree underflow/merge policy on delete** — chunk 2's tree
+  deliberately never rebalances or merges underfull nodes
+  ([0016](decisions/0016-btree-node-format.md)), so heavy delete
+  traffic leaves the tree sparser over time with no fix yet. Whether to
+  add merging later, fold it into chunk 4's reclamation work, or accept
+  permanent sparseness isn't decided.
+- **Oversized key/value handling** — chunk 2's tree has no overflow
+  pages; an entry too large for one page is a reported error
+  ([0016](decisions/0016-btree-node-format.md)). Whether the row store
+  (chunk 5+) needs an overflow-chain mechanism for large values, or can
+  get away with a hard size ceiling, isn't decided.
 - **Publish-time crate/package naming** — `basalt`, `basalt-cli`, and
   `basalt-tui` are already taken on crates.io (an unrelated Vulkan UI
   framework and its sub-crates); `basalt-proto`, `basalt-server`,
