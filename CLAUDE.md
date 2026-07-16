@@ -32,3 +32,11 @@ any code:
    resolved, or add new sub-questions the decision raised),
    `design/decisions/README.md` (add the new ADR to the index), and
    `design/roadmap.md` if the decision changes build order/sequencing.
+
+When implementing a `design/stage1-plan.md` chunk: if the chunk's
+on-disk/in-memory format isn't already decided, write the ADR and add
+inline acceptance criteria to the chunk's entry in `stage1-plan.md`
+first (see chunks 1 and 2 for the pattern), sync the docs per step 2
+above, then implement and test. Commit as two separate commits — the
+decision/docs first, the implementation second — rather than one
+combined commit.
