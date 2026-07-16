@@ -148,6 +148,31 @@ impl Pager {
         self.page_count
     }
 
+    /// Ensures the file is large enough to hold `page_id`, extending it
+    /// (without touching the free-list) if not. Used only by WAL redo
+    /// (`design/decisions/0017-wal-format.md`): a crash may lose the
+    /// file-length extension an `allocate_page` call made, so redo
+    /// re-extends as needed before writing a page back into place, rather
+    /// than assuming `page_count` already covers it.
+    pub fn extend_to(&mut self, page_id: PageId) -> Result<(), PagerError> {
+        if page_id < self.page_count {
+            return Ok(());
+        }
+        let new_count = page_id + 1;
+        let new_len = PREAMBLE_SIZE + new_count * self.page_size as u64;
+        self.file.set_len(new_len)?;
+        self.page_count = new_count;
+        Ok(())
+    }
+
+    /// Flushes the data file to durable storage. Used by WAL checkpointing
+    /// (`design/decisions/0017-wal-format.md`) — the pager itself writes
+    /// through to the OS on every `write_page` but never fsyncs on its own.
+    pub fn sync(&mut self) -> Result<(), PagerError> {
+        self.file.sync_all()?;
+        Ok(())
+    }
+
     /// Reuses a free-listed page if one exists, otherwise extends the file
     /// by one page. Newly allocated (never-before-written) page content is
     /// unspecified until the caller writes it.

@@ -19,9 +19,8 @@ pub enum BTreeError {
     Pager(PagerError),
     /// A single key/value pair too large to fit in an otherwise-empty page.
     EntryTooLarge { key_len: usize, value_len: usize },
-    /// A node's on-disk bytes don't parse as a valid leaf/internal node, or
-    /// an internal invariant (e.g. "removing an entry can't overflow a
-    /// page") was violated.
+    /// A node's on-disk bytes don't parse as a valid leaf/internal node, an
+    /// internal invariant was violated, or an underlying WAL write failed.
     Corrupt(String),
 }
 
@@ -53,6 +52,36 @@ impl std::error::Error for BTreeError {
     }
 }
 
+/// What a B+-tree mutation writes new node pages through. `Pager` alone
+/// (chunk 2 scope: in-memory tree, no WAL) implements this directly;
+/// `crate::engine::WalStore` (chunk 3) also logs each write as it happens.
+pub trait NodeStore {
+    fn page_size(&self) -> usize;
+    fn read_page(&mut self, id: PageId, buf: &mut [u8]) -> Result<(), BTreeError>;
+    /// Allocates a fresh page and writes `buf` to it, returning its id.
+    /// `base` is the page this content was derived from (`None` if it's
+    /// brand new, not a rewrite of an existing node) — plain `Pager` use
+    /// ignores it; a logging store uses it to compute a WAL diff.
+    fn write_new_node(&mut self, base: Option<PageId>, buf: &[u8]) -> Result<PageId, BTreeError>;
+}
+
+impl NodeStore for Pager {
+    fn page_size(&self) -> usize {
+        Pager::page_size(self) as usize
+    }
+
+    fn read_page(&mut self, id: PageId, buf: &mut [u8]) -> Result<(), BTreeError> {
+        Pager::read_page(self, id, buf)?;
+        Ok(())
+    }
+
+    fn write_new_node(&mut self, _base: Option<PageId>, buf: &[u8]) -> Result<PageId, BTreeError> {
+        let id = Pager::allocate_page(self)?;
+        Pager::write_page(self, id, buf)?;
+        Ok(id)
+    }
+}
+
 #[derive(Debug, Clone)]
 struct LeafEntry {
     key: Vec<u8>,
@@ -81,7 +110,9 @@ enum Node {
 /// The root is tracked only in memory (`design/stage1-plan.md` chunk 2):
 /// nothing persists it to the data file. A crash, or simply dropping this
 /// handle, loses the tree unless the caller remembers `root()` itself —
-/// the pages themselves are still genuinely durable via the pager.
+/// the pages themselves are still genuinely durable via the pager. Chunk 3
+/// (`crate::engine`) makes the root recoverable via the WAL instead of
+/// changing this.
 pub struct BTree {
     root: PageId,
 }
@@ -98,13 +129,12 @@ enum InsertOutcome {
 impl BTree {
     /// Allocates a fresh page holding an empty leaf node and returns a tree
     /// rooted there.
-    pub fn create_empty(pager: &mut Pager) -> Result<Self, BTreeError> {
-        let page_size = pager.page_size() as usize;
+    pub fn create_empty<S: NodeStore>(store: &mut S) -> Result<Self, BTreeError> {
+        let page_size = store.page_size();
         let buf = try_encode_leaf(&[], page_size).ok_or_else(|| {
             BTreeError::Corrupt("page size too small to hold even an empty leaf node".into())
         })?;
-        let id = pager.allocate_page()?;
-        pager.write_page(id, &buf)?;
+        let id = store.write_new_node(None, &buf)?;
         Ok(BTree { root: id })
     }
 
@@ -122,8 +152,8 @@ impl BTree {
     /// Inserts `key` → `value`, or overwrites the value if `key` is already
     /// present (upsert). Never mutates a live page: writes new pages along
     /// the path to the root and leaves old ones untouched.
-    pub fn insert(&mut self, pager: &mut Pager, key: &[u8], value: &[u8]) -> Result<(), BTreeError> {
-        let page_size = pager.page_size() as usize;
+    pub fn insert<S: NodeStore>(&mut self, store: &mut S, key: &[u8], value: &[u8]) -> Result<(), BTreeError> {
+        let page_size = store.page_size();
         let solo = vec![LeafEntry {
             key: key.to_vec(),
             value: value.to_vec(),
@@ -135,14 +165,13 @@ impl BTree {
             });
         }
 
-        match insert_into(pager, self.root, key, value)? {
+        match insert_into(store, self.root, key, value)? {
             InsertOutcome::Fit(new_root) => self.root = new_root,
             InsertOutcome::Split { left, sep_key, right } => {
                 let entries = vec![InternalEntry { key: sep_key, child: right }];
                 let buf = try_encode_internal(left, &entries, page_size)
                     .ok_or_else(|| BTreeError::Corrupt("new root overflows its page".into()))?;
-                let id = pager.allocate_page()?;
-                pager.write_page(id, &buf)?;
+                let id = store.write_new_node(None, &buf)?;
                 self.root = id;
             }
         }
@@ -150,15 +179,15 @@ impl BTree {
     }
 
     /// Returns the value for `key`, or `None` if absent.
-    pub fn lookup(&self, pager: &mut Pager, key: &[u8]) -> Result<Option<Vec<u8>>, BTreeError> {
-        lookup_in(pager, self.root, key)
+    pub fn lookup<S: NodeStore>(&self, store: &mut S, key: &[u8]) -> Result<Option<Vec<u8>>, BTreeError> {
+        lookup_in(store, self.root, key)
     }
 
     /// Removes `key` if present. Returns whether it was present; deleting
     /// an absent key is a no-op, not an error. Never rebalances/merges
     /// underfull nodes (see `design/decisions/0016-btree-node-format.md`).
-    pub fn delete(&mut self, pager: &mut Pager, key: &[u8]) -> Result<bool, BTreeError> {
-        match delete_from(pager, self.root, key)? {
+    pub fn delete<S: NodeStore>(&mut self, store: &mut S, key: &[u8]) -> Result<bool, BTreeError> {
+        match delete_from(store, self.root, key)? {
             Some(new_root) => {
                 self.root = new_root;
                 Ok(true)
@@ -169,30 +198,30 @@ impl BTree {
 
     /// Returns every `(key, value)` pair with a key in `[start, end)`
     /// (per the given bounds), in ascending key order.
-    pub fn range(
+    pub fn range<S: NodeStore>(
         &self,
-        pager: &mut Pager,
+        store: &mut S,
         start: Bound<&[u8]>,
         end: Bound<&[u8]>,
     ) -> Result<Entries, BTreeError> {
         let mut out = Vec::new();
-        collect_range(pager, self.root, start, end, &mut out)?;
+        collect_range(store, self.root, start, end, &mut out)?;
         Ok(out)
     }
 
     /// All entries in ascending key order.
-    pub fn scan_all(&self, pager: &mut Pager) -> Result<Entries, BTreeError> {
-        self.range(pager, Bound::Unbounded, Bound::Unbounded)
+    pub fn scan_all<S: NodeStore>(&self, store: &mut S) -> Result<Entries, BTreeError> {
+        self.range(store, Bound::Unbounded, Bound::Unbounded)
     }
 }
 
-fn insert_into(
-    pager: &mut Pager,
+fn insert_into<S: NodeStore>(
+    store: &mut S,
     node_id: PageId,
     key: &[u8],
     value: &[u8],
 ) -> Result<InsertOutcome, BTreeError> {
-    match decode_node(pager, node_id)? {
+    match decode_node(store, node_id)? {
         Node::Leaf(mut entries) => {
             match entries.binary_search_by(|e| e.key.as_slice().cmp(key)) {
                 Ok(i) => entries[i].value = value.to_vec(),
@@ -204,12 +233,12 @@ fn insert_into(
                     },
                 ),
             }
-            write_leaf_or_split(pager, entries)
+            write_leaf_or_split(store, node_id, entries)
         }
         Node::Internal { mut leftmost, mut entries } => {
             let idx = child_index(&entries, key);
             let child_id = if idx == 0 { leftmost } else { entries[idx - 1].child };
-            match insert_into(pager, child_id, key, value)? {
+            match insert_into(store, child_id, key, value)? {
                 InsertOutcome::Fit(new_child) => {
                     if idx == 0 {
                         leftmost = new_child;
@@ -226,13 +255,13 @@ fn insert_into(
                     entries.insert(idx, InternalEntry { key: sep_key, child: right });
                 }
             }
-            write_internal_or_split(pager, leftmost, entries)
+            write_internal_or_split(store, node_id, leftmost, entries)
         }
     }
 }
 
-fn lookup_in(pager: &mut Pager, node_id: PageId, key: &[u8]) -> Result<Option<Vec<u8>>, BTreeError> {
-    match decode_node(pager, node_id)? {
+fn lookup_in<S: NodeStore>(store: &mut S, node_id: PageId, key: &[u8]) -> Result<Option<Vec<u8>>, BTreeError> {
+    match decode_node(store, node_id)? {
         Node::Leaf(entries) => Ok(entries
             .binary_search_by(|e| e.key.as_slice().cmp(key))
             .ok()
@@ -240,29 +269,28 @@ fn lookup_in(pager: &mut Pager, node_id: PageId, key: &[u8]) -> Result<Option<Ve
         Node::Internal { leftmost, entries } => {
             let idx = child_index(&entries, key);
             let child_id = if idx == 0 { leftmost } else { entries[idx - 1].child };
-            lookup_in(pager, child_id, key)
+            lookup_in(store, child_id, key)
         }
     }
 }
 
-fn delete_from(pager: &mut Pager, node_id: PageId, key: &[u8]) -> Result<Option<PageId>, BTreeError> {
-    let page_size = pager.page_size() as usize;
-    match decode_node(pager, node_id)? {
+fn delete_from<S: NodeStore>(store: &mut S, node_id: PageId, key: &[u8]) -> Result<Option<PageId>, BTreeError> {
+    let page_size = store.page_size();
+    match decode_node(store, node_id)? {
         Node::Leaf(mut entries) => match entries.binary_search_by(|e| e.key.as_slice().cmp(key)) {
             Err(_) => Ok(None),
             Ok(i) => {
                 entries.remove(i);
                 let buf = try_encode_leaf(&entries, page_size)
                     .expect("removing an entry cannot make a leaf node overflow");
-                let id = pager.allocate_page()?;
-                pager.write_page(id, &buf)?;
+                let id = store.write_new_node(Some(node_id), &buf)?;
                 Ok(Some(id))
             }
         },
         Node::Internal { mut leftmost, mut entries } => {
             let idx = child_index(&entries, key);
             let child_id = if idx == 0 { leftmost } else { entries[idx - 1].child };
-            match delete_from(pager, child_id, key)? {
+            match delete_from(store, child_id, key)? {
                 None => Ok(None),
                 Some(new_child) => {
                     if idx == 0 {
@@ -272,8 +300,7 @@ fn delete_from(pager: &mut Pager, node_id: PageId, key: &[u8]) -> Result<Option<
                     }
                     let buf = try_encode_internal(leftmost, &entries, page_size)
                         .expect("repointing one child cannot make an internal node overflow");
-                    let id = pager.allocate_page()?;
-                    pager.write_page(id, &buf)?;
+                    let id = store.write_new_node(Some(node_id), &buf)?;
                     Ok(Some(id))
                 }
             }
@@ -287,11 +314,14 @@ fn child_index(entries: &[InternalEntry], key: &[u8]) -> usize {
     entries.partition_point(|e| e.key.as_slice() <= key)
 }
 
-fn write_leaf_or_split(pager: &mut Pager, entries: Vec<LeafEntry>) -> Result<InsertOutcome, BTreeError> {
-    let page_size = pager.page_size() as usize;
+fn write_leaf_or_split<S: NodeStore>(
+    store: &mut S,
+    base: PageId,
+    entries: Vec<LeafEntry>,
+) -> Result<InsertOutcome, BTreeError> {
+    let page_size = store.page_size();
     if let Some(buf) = try_encode_leaf(&entries, page_size) {
-        let id = pager.allocate_page()?;
-        pager.write_page(id, &buf)?;
+        let id = store.write_new_node(Some(base), &buf)?;
         return Ok(InsertOutcome::Fit(id));
     }
 
@@ -301,22 +331,20 @@ fn write_leaf_or_split(pager: &mut Pager, entries: Vec<LeafEntry>) -> Result<Ins
         .ok_or_else(|| BTreeError::Corrupt("left half of leaf split still overflows".into()))?;
     let right_buf = try_encode_leaf(&right, page_size)
         .ok_or_else(|| BTreeError::Corrupt("right half of leaf split still overflows".into()))?;
-    let left_id = pager.allocate_page()?;
-    pager.write_page(left_id, &left_buf)?;
-    let right_id = pager.allocate_page()?;
-    pager.write_page(right_id, &right_buf)?;
+    let left_id = store.write_new_node(Some(base), &left_buf)?;
+    let right_id = store.write_new_node(Some(base), &right_buf)?;
     Ok(InsertOutcome::Split { left: left_id, sep_key, right: right_id })
 }
 
-fn write_internal_or_split(
-    pager: &mut Pager,
+fn write_internal_or_split<S: NodeStore>(
+    store: &mut S,
+    base: PageId,
     leftmost: PageId,
     entries: Vec<InternalEntry>,
 ) -> Result<InsertOutcome, BTreeError> {
-    let page_size = pager.page_size() as usize;
+    let page_size = store.page_size();
     if let Some(buf) = try_encode_internal(leftmost, &entries, page_size) {
-        let id = pager.allocate_page()?;
-        pager.write_page(id, &buf)?;
+        let id = store.write_new_node(Some(base), &buf)?;
         return Ok(InsertOutcome::Fit(id));
     }
 
@@ -326,10 +354,8 @@ fn write_internal_or_split(
         .ok_or_else(|| BTreeError::Corrupt("left half of internal split still overflows".into()))?;
     let right_buf = try_encode_internal(r_leftmost, &r_entries, page_size)
         .ok_or_else(|| BTreeError::Corrupt("right half of internal split still overflows".into()))?;
-    let left_id = pager.allocate_page()?;
-    pager.write_page(left_id, &left_buf)?;
-    let right_id = pager.allocate_page()?;
-    pager.write_page(right_id, &right_buf)?;
+    let left_id = store.write_new_node(Some(base), &left_buf)?;
+    let right_id = store.write_new_node(Some(base), &right_buf)?;
     Ok(InsertOutcome::Split { left: left_id, sep_key, right: right_id })
 }
 
@@ -433,14 +459,14 @@ fn range_after_end(lower_inclusive: &[u8], end: Bound<&[u8]>) -> bool {
     }
 }
 
-fn collect_range(
-    pager: &mut Pager,
+fn collect_range<S: NodeStore>(
+    store: &mut S,
     node_id: PageId,
     start: Bound<&[u8]>,
     end: Bound<&[u8]>,
     out: &mut Entries,
 ) -> Result<(), BTreeError> {
-    match decode_node(pager, node_id)? {
+    match decode_node(store, node_id)? {
         Node::Leaf(entries) => {
             for e in entries {
                 if key_before_start(&e.key, start) {
@@ -463,17 +489,17 @@ fn collect_range(
                 if i > 0 && range_after_end(&entries[i - 1].key, end) {
                     break;
                 }
-                collect_range(pager, child, start, end, out)?;
+                collect_range(store, child, start, end, out)?;
             }
             Ok(())
         }
     }
 }
 
-fn decode_node(pager: &mut Pager, id: PageId) -> Result<Node, BTreeError> {
-    let page_size = pager.page_size() as usize;
+fn decode_node<S: NodeStore>(store: &mut S, id: PageId) -> Result<Node, BTreeError> {
+    let page_size = store.page_size();
     let mut buf = vec![0u8; page_size];
-    pager.read_page(id, &mut buf)?;
+    store.read_page(id, &mut buf)?;
     decode_bytes(&buf)
 }
 
