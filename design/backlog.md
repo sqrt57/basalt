@@ -82,6 +82,16 @@ raised and set aside without a commitment either way.
   from the TOML file ([0012](decisions/0012-server-config.md)) can be
   overridden by CLI flags or env vars, and their precedence if so. Not
   decided.
+- **Publish-time crate/package naming** — `basalt`, `basalt-cli`, and
+  `basalt-tui` are already taken on crates.io (an unrelated Vulkan UI
+  framework and its sub-crates); `basalt-proto`, `basalt-server`,
+  `basalt-client-core`, and `basalt-web-ui` are free as of this writing.
+  The one crate that exists so far was renamed `basalt-engine` → `engine`
+  to sidestep the collision risk on that one ([0014](decisions/0014-crate-layout.md)
+  update note); whether to drop the `basalt-*` prefix from the rest too,
+  pick a different prefix, or accept `basalt` internally and publish
+  externally under another name isn't decided, and doesn't block
+  implementation.
 
 ## Deferred, Not Yet Scheduled
 

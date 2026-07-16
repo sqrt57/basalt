@@ -123,3 +123,15 @@ get there, only extended.
   modules) — that's an implementation detail for
   [stage1-plan.md](../stage1-plan.md)'s chunks, not a workspace-level
   concern.
+
+## Update (2026-07-16)
+
+`basalt-engine` renamed to `engine`: `basalt`, `basalt-cli`, and
+`basalt-tui` turned out to already be taken on crates.io by an unrelated
+project (see [backlog.md](../backlog.md)), which reopened the
+`basalt-*` prefix as a live question rather than a settled bikeshed.
+Dropping the prefix from the one crate that exists so far avoids
+carrying a name that may not survive publishing; the other reserved
+slots (`basalt-proto`, `basalt-server`, `basalt-client`,
+`basalt-client-core`, `basalt-cli`, `basalt-tui`, `basalt-gui`,
+`basalt-web-ui`) keep their names for now pending that backlog item.

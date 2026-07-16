@@ -83,7 +83,8 @@ substrate is solid.
 
 - **Crate layout** — decided in
   [0014](decisions/0014-crate-layout.md): stage 1 lives entirely in the
-  `basalt-engine` crate.
+  `engine` crate (named `basalt-engine` in that ADR, renamed since — see
+  the ADR's update note).
 - **Starting point** — chunks 1-2 (page I/O + in-memory COW B+-tree, no
   WAL yet) first, in the order the chunk list above already gives, rather
   than front-loading WAL+recovery. The binary-diff log format
