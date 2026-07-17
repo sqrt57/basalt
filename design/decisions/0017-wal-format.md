@@ -1,6 +1,6 @@
 # ADR 0017: WAL Format — Log Records, LSN, and Redo Recovery
 
-Status: Proposed (2026-07-16), revised (2026-07-17)
+Status: Proposed (2026-07-16), revised (2026-07-17), revised (2026-07-17, cont'd)
 
 ## Context
 
@@ -53,6 +53,39 @@ opposite of what prefix-trim is for. Revised below: the `page_lsn`
 bytes are logged as their own small, unconditional range, and
 prefix/suffix trimming runs only over the content *after* the common
 header, where it still works as intended.
+
+**Revision (2026-07-17, cont'd)**: implementing chunk 3 against the
+revision above surfaced a correctness bug in it, caught by a test that
+inserts enough entries to force the first leaf split (which promotes a
+new internal root). The unconditional range only covered `page_lsn`
+(offset 2..10), leaving `page_type` (offset 0) and the reserved byte
+(offset 1) to fall out of *either* range — neither the unconditional
+one nor the conditional one, which explicitly starts at offset 10. That
+relied on the stated assumption that "`page_type` and reserved byte are
+expected to match between a COW base and its successor," which holds
+for an ordinary COW rewrite (a leaf split's two halves are still
+leaves; an internal node's repointed child is still internal) but not
+for a **new root created by a split**: [0016](0016-btree-node-format.md)
+builds it via `write_new_node(base: None, ...)`, so its "base" for
+diffing purposes is the implicit all-zero page (per this ADR's
+`base_page_id = 0` convention) — and an all-zero page's `page_type` byte
+is `0`, coincidentally equal to leaf (`0`) but *not* equal to internal
+(`1`). Redo reconstructs from that zero base, never sees `page_type`
+in either logged range, and leaves the recovered page's `page_type`
+byte at `0` — silently mislabeling a brand-new internal root as a leaf,
+which then decodes garbage (the reader assumes the wrong header
+layout). The bug didn't surface earlier because every *other*
+`base: None` write in chunk 2 ([0016](0016-btree-node-format.md))
+happens to build a leaf (empty-tree creation) — `page_type = 0` — so it
+matched the zero base by coincidence, masking the gap until a
+`base: None` write of any other type (here, `page_type = 1`) was
+exercised. Revised below: the unconditional range widens from just
+`page_lsn` (offset 2..10, 8 bytes) to the *entire* common page header
+(offset 0..10, 10 bytes) — `page_type` and the reserved byte included.
+This removes the "expected to match the base" assumption entirely
+rather than special-casing the `base: None` case, since a page's type
+is cheap to log unconditionally (2 extra bytes) and correctness
+shouldn't depend on which writes happen to reuse their base's type.
 
 ## Decision
 
@@ -170,12 +203,16 @@ tail can therefore only contain work that was never acknowledged.
 page, and chunk 3's first algorithm always uses exactly one or two of
 them:
 
-- **Range 1, unconditional**: the common page header's 8-byte
-  `page_lsn` field (offset 2..10 — see
-  [0015](0015-page-storage-format.md)), always logged, since it's
-  stamped fresh on every write and therefore always differs from the
-  base page's. Logging it as its own tiny range keeps it from
-  poisoning the prefix-trim comparison below.
+- **Range 1, unconditional**: the entire 10-byte common page header
+  (offset 0..10 — `page_type`, reserved byte, `page_lsn`; see
+  [0015](0015-page-storage-format.md)), always logged in full. `page_lsn`
+  is stamped fresh on every write and therefore always differs from the
+  base page's, which is reason enough to exclude it from the prefix-trim
+  comparison below; `page_type` and the reserved byte are included too
+  rather than assumed to match the base, since a `base: None` write's
+  implicit all-zero "base" doesn't necessarily share the new page's type
+  (see the revision note above — this is what a new internal root's
+  creation gets wrong if `page_type` isn't logged unconditionally).
 - **Range 2, conditional**: trim the common prefix and common suffix
   between base and new page content *starting from offset 10* (i.e.
   excluding the whole common header, not just `page_lsn`, from the
@@ -257,13 +294,14 @@ up to them.
   Durable root *history* (multiple generations, as opposed to one
   recoverable current root) stays chunk 4's job.
 - `num_ranges` is effectively never `0` anymore now that every
-  `PageDiff` unconditionally includes the `page_lsn` range — the
-  smallest possible diff is `num_ranges = 1` (just those 8 bytes, if
-  nothing else differs) rather than `num_ranges = 0` (identical pages).
-  A small, fixed per-write overhead (one extra range header, 4 bytes,
-  plus the 8-byte `page_lsn` payload) in exchange for every page
-  carrying real provenance; not a concern at chunk-3's correctness-first
-  stage.
+  `PageDiff` unconditionally includes the common-header range — the
+  smallest possible diff is `num_ranges = 1` (just those 10 bytes, if
+  content past offset 10 is unchanged) rather than `num_ranges = 0`
+  (identical pages). A small, fixed per-write overhead (one extra range
+  header, 4 bytes, plus the 10-byte common-header payload) in exchange
+  for every page carrying real provenance and a correct type tag even
+  when its "base" is the implicit zero page; not a concern at chunk-3's
+  correctness-first stage.
 - Redo applying a `PageDiff` to a `new_page_id` beyond the data file's
   currently-allocated range must extend the file first rather than
   assume the original `allocate_page` call's extension survived a
