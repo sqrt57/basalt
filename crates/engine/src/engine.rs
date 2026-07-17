@@ -89,13 +89,26 @@ impl NodeStore for WalStore<'_> {
         }
 
         let new_id = self.pager.allocate_page()?;
-        self.pager.write_page(new_id, buf)?;
 
+        // The LSN this write will use is fixed before the diff is computed
+        // and stamped into the new page's `page_lsn` field first, so the
+        // diff correctly captures that change along with whatever else
+        // differs (`design/decisions/0017-wal-format.md`).
         let lsn = self
             .wal
-            .append_page_diff(new_id, base, &base_bytes, buf)
+            .peek_next_lsn()
             .map_err(|e| BTreeError::Corrupt(e.to_string()))?;
-        self.dpt.entry(new_id).or_insert(lsn);
+        let mut stamped = buf.to_vec();
+        stamped[2..10].copy_from_slice(&lsn.to_le_bytes());
+
+        self.pager.write_page(new_id, &stamped)?;
+
+        let recorded_lsn = self
+            .wal
+            .append_page_diff(new_id, base, &base_bytes, &stamped)
+            .map_err(|e| BTreeError::Corrupt(e.to_string()))?;
+        debug_assert_eq!(lsn, recorded_lsn, "single-writer log: no append can land between peek and here");
+        self.dpt.entry(new_id).or_insert(recorded_lsn);
 
         if let Some(base_id) = base {
             self.superseded.push(base_id);
@@ -364,6 +377,31 @@ mod tests {
         let mut os = prefix.as_os_str().to_owned();
         os.push(".log.bin");
         std::path::PathBuf::from(os)
+    }
+
+    #[test]
+    fn reopen_after_wal_logged_split_recovers_a_correctly_typed_new_root() {
+        // Regression test for the bug ADR 0017's second 2026-07-17 revision
+        // fixed: a split's new root is written with `base: None`, whose
+        // implicit all-zero "base" has `page_type = 0` (leaf) even though
+        // the new root is internal (`page_type = 1`). If the diff's
+        // unconditional range doesn't include `page_type`, redo leaves the
+        // recovered root mislabeled as a leaf and it fails to decode.
+        // Enough entries at this page size to force the first split.
+        let dir = tempdir().unwrap();
+        let prefix = dir.path().join("db");
+        let n = 10;
+        {
+            let mut db = Database::create(&prefix, 256).unwrap();
+            for i in 0..n {
+                db.insert(&key_for(i), &value_for(i)).unwrap();
+            }
+            db.close().unwrap();
+        }
+        let mut db = Database::open(&prefix).unwrap();
+        for i in 0..n {
+            assert_eq!(db.lookup(&key_for(i)).unwrap(), Some(value_for(i)));
+        }
     }
 
     #[test]

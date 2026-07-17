@@ -14,12 +14,19 @@ const PREAMBLE_SIZE: u64 = 64;
 const MAGIC: &[u8; 8] = b"BSLTLOG_";
 const FORMAT_VERSION: u32 = 1;
 /// Sentinel `base_page_id` meaning "no base — reconstruct from an all-zero
-/// page", matching `pager.rs`'s `FREE_LIST_NONE` convention.
-const NO_BASE: u64 = u64::MAX;
+/// page", matching `pager.rs`'s page-id-`0`-is-null convention
+/// (`design/decisions/0015-page-storage-format.md`) — page id `0` is never
+/// a physical page, so it can never collide with a real base page.
+const NO_BASE: u64 = 0;
 
 const RECORD_PAGE_DIFF: u8 = 0;
 const RECORD_COMMIT: u8 = 1;
 const RECORD_CHECKPOINT: u8 = 2;
+
+/// Offset of the common page header's `page_lsn` field
+/// (`design/decisions/0015-page-storage-format.md`) within a page buffer.
+#[cfg(test)]
+const PAGE_LSN_OFFSET: usize = 2;
 
 #[derive(Debug)]
 pub enum WalError {
@@ -107,6 +114,17 @@ impl Wal {
         }
 
         Ok(Wal { file })
+    }
+
+    /// The LSN the next-appended record will get — the current end-of-log
+    /// offset (`design/decisions/0017-wal-format.md`'s "LSN = log byte
+    /// offset"). Callers that need to stamp a page's `page_lsn` before
+    /// diffing it (chunk 3's write path) peek this first, then pass the
+    /// same buffer to `append_page_diff`; sound only because this is a
+    /// single-writer log with nothing else able to append between the peek
+    /// and the matching append.
+    pub fn peek_next_lsn(&mut self) -> Result<Lsn, WalError> {
+        Ok(self.file.seek(SeekFrom::End(0))?)
     }
 
     fn append_record(&mut self, record_type: u8, payload: &[u8]) -> Result<Lsn, WalError> {
@@ -265,30 +283,44 @@ fn apply_page_diff(pager: &mut Pager, payload: &[u8]) -> Result<(), WalError> {
     Ok(())
 }
 
-/// Diffs two equal-length page buffers by trimming their common prefix and
-/// common suffix, producing at most one changed range (none if identical).
-/// The wire format supports several ranges for a smarter algorithm later
-/// (see `design/decisions/0017-wal-format.md`); this is deliberately the
-/// simplest one that satisfies it.
+/// Diffs two equal-length page buffers into the ranges
+/// `design/decisions/0017-wal-format.md` specifies:
+///
+/// - Range 1, unconditional: the entire 10-byte common page header
+///   (offset 0..10 — `page_type`, reserved byte, `page_lsn`), always
+///   logged in full. `page_lsn` is stamped fresh on every write and
+///   therefore always differs from the base page's; `page_type` and the
+///   reserved byte are logged too rather than assumed to match the base
+///   — a `base: None` write's implicit all-zero "base" doesn't
+///   necessarily share the new page's type (e.g. a freshly-promoted
+///   internal root), so leaving `page_type` out of every logged range
+///   would silently mislabel it on redo (see the ADR's revision note).
+/// - Range 2, conditional: the common prefix/suffix trim of content
+///   *starting at offset 10*, omitted if that content is byte-identical.
 fn diff_ranges(base: &[u8], new: &[u8]) -> Vec<(usize, Vec<u8>)> {
     debug_assert_eq!(base.len(), new.len());
     let len = base.len();
+    const HEADER_END: usize = 10;
 
+    let mut ranges = vec![(0usize, new[0..HEADER_END].to_vec())];
+
+    let content_len = len - HEADER_END;
     let mut prefix = 0;
-    while prefix < len && base[prefix] == new[prefix] {
+    while prefix < content_len && base[HEADER_END + prefix] == new[HEADER_END + prefix] {
         prefix += 1;
     }
-    if prefix == len {
-        return Vec::new();
+    if prefix < content_len {
+        let mut suffix = 0;
+        while suffix < content_len - prefix
+            && base[len - 1 - suffix] == new[len - 1 - suffix]
+        {
+            suffix += 1;
+        }
+        let end = len - suffix;
+        ranges.push((HEADER_END + prefix, new[HEADER_END + prefix..end].to_vec()));
     }
 
-    let mut suffix = 0;
-    while suffix < len - prefix && base[len - 1 - suffix] == new[len - 1 - suffix] {
-        suffix += 1;
-    }
-
-    let end = len - suffix;
-    vec![(prefix, new[prefix..end].to_vec())]
+    ranges
 }
 
 fn log_file_path(path_prefix: &Path) -> PathBuf {
@@ -302,19 +334,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn diff_ranges_identical_pages_is_empty() {
-        let buf = vec![7u8; 32];
-        assert_eq!(diff_ranges(&buf, &buf), Vec::new());
+    fn diff_ranges_identical_content_still_logs_the_common_header_range() {
+        // Identical past offset 10 (the common header) still produces the
+        // unconditional header range, just not a second content range —
+        // `num_ranges` is never 0 (`design/decisions/0017-wal-format.md`).
+        let mut base = vec![7u8; 32];
+        let mut new = base.clone();
+        base[PAGE_LSN_OFFSET..10].copy_from_slice(&1u64.to_le_bytes());
+        new[PAGE_LSN_OFFSET..10].copy_from_slice(&2u64.to_le_bytes());
+        let ranges = diff_ranges(&base, &new);
+        assert_eq!(ranges, vec![(0, new[0..10].to_vec())]);
     }
 
     #[test]
-    fn diff_ranges_trims_common_prefix_and_suffix() {
-        let mut base = vec![0u8; 16];
+    fn diff_ranges_logs_page_type_even_when_base_is_the_implicit_zero_page() {
+        // A `base: None` write's implicit base is all-zero, so a new page
+        // whose `page_type` isn't 0 (e.g. an internal root, type 1) must
+        // still have that byte captured — it's not "expected to match the
+        // base" the way it is for an ordinary COW rewrite (the bug this
+        // ADR's second 2026-07-17 revision fixed).
+        let base = vec![0u8; 32];
         let mut new = base.clone();
-        new[5] = 1;
-        new[6] = 2;
+        new[0] = 1; // page_type = internal
         let ranges = diff_ranges(&base, &new);
-        assert_eq!(ranges, vec![(5, vec![1, 2])]);
+        assert_eq!(ranges[0], (0, new[0..10].to_vec()));
+    }
+
+    #[test]
+    fn diff_ranges_trims_common_prefix_and_suffix_past_the_header() {
+        let mut base = vec![0u8; 32];
+        let mut new = base.clone();
+        new[15] = 1;
+        new[16] = 2;
+        let ranges = diff_ranges(&base, &new);
+        assert_eq!(ranges, vec![(0, new[0..10].to_vec()), (15, vec![1, 2])]);
 
         base[0] = 9; // sanity: base itself is untouched by diffing
         assert_eq!(base[0], 9);

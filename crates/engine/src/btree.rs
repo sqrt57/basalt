@@ -6,8 +6,8 @@ use std::ops::Bound;
 
 use crate::pager::{PageId, Pager, PagerError};
 
-const LEAF_HEADER_SIZE: usize = 8;
-const INTERNAL_HEADER_SIZE: usize = 16;
+const LEAF_HEADER_SIZE: usize = 16;
+const INTERNAL_HEADER_SIZE: usize = 24;
 const SLOT_SIZE: usize = 4;
 const NODE_TYPE_LEAF: u8 = 0;
 const NODE_TYPE_INTERNAL: u8 = 1;
@@ -505,7 +505,7 @@ fn decode_node<S: NodeStore>(store: &mut S, id: PageId) -> Result<Node, BTreeErr
 
 fn decode_bytes(buf: &[u8]) -> Result<Node, BTreeError> {
     let node_type = buf[0];
-    let num_entries = u16::from_le_bytes(buf[2..4].try_into().unwrap()) as usize;
+    let num_entries = u16::from_le_bytes(buf[10..12].try_into().unwrap()) as usize;
 
     match node_type {
         NODE_TYPE_LEAF => {
@@ -524,7 +524,7 @@ fn decode_bytes(buf: &[u8]) -> Result<Node, BTreeError> {
             Ok(Node::Leaf(entries))
         }
         NODE_TYPE_INTERNAL => {
-            let leftmost = u64::from_le_bytes(buf[8..16].try_into().unwrap());
+            let leftmost = u64::from_le_bytes(buf[16..24].try_into().unwrap());
             let mut entries = Vec::with_capacity(num_entries);
             for i in 0..num_entries {
                 let slot_off = INTERNAL_HEADER_SIZE + i * SLOT_SIZE;
@@ -577,9 +577,9 @@ fn try_encode_leaf(entries: &[LeafEntry], page_size: usize) -> Option<Vec<u8>> {
     let free_end = page_size - cells_total;
     let mut buf = vec![0u8; page_size];
     buf[0] = NODE_TYPE_LEAF;
-    buf[2..4].copy_from_slice(&(n as u16).to_le_bytes());
-    buf[4..6].copy_from_slice(&(free_start as u16).to_le_bytes());
-    buf[6..8].copy_from_slice(&(free_end as u16).to_le_bytes());
+    buf[10..12].copy_from_slice(&(n as u16).to_le_bytes());
+    buf[12..14].copy_from_slice(&(free_start as u16).to_le_bytes());
+    buf[14..16].copy_from_slice(&(free_end as u16).to_le_bytes());
 
     let mut cursor = free_end;
     for (i, cell) in cells.iter().enumerate() {
@@ -621,10 +621,10 @@ fn try_encode_internal(leftmost: PageId, entries: &[InternalEntry], page_size: u
     let free_end = page_size - cells_total;
     let mut buf = vec![0u8; page_size];
     buf[0] = NODE_TYPE_INTERNAL;
-    buf[2..4].copy_from_slice(&(n as u16).to_le_bytes());
-    buf[4..6].copy_from_slice(&(free_start as u16).to_le_bytes());
-    buf[6..8].copy_from_slice(&(free_end as u16).to_le_bytes());
-    buf[8..16].copy_from_slice(&leftmost.to_le_bytes());
+    buf[10..12].copy_from_slice(&(n as u16).to_le_bytes());
+    buf[12..14].copy_from_slice(&(free_start as u16).to_le_bytes());
+    buf[14..16].copy_from_slice(&(free_end as u16).to_le_bytes());
+    buf[16..24].copy_from_slice(&leftmost.to_le_bytes());
 
     let mut cursor = free_end;
     for (i, cell) in cells.iter().enumerate() {
