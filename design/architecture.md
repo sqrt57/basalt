@@ -138,17 +138,27 @@ data, one shared page allocator) and `<prefix>.log.bin` (the shared
 WAL). No directory convention, no per-engine file.
 ([0011](decisions/0011-embedded-config.md))
 
-`<prefix>.data.bin` itself starts with a fixed 64-byte preamble (magic
-bytes, format/version, page size, free-list head), read before any
-page-sized I/O is possible; page size is chosen per database at
-creation and immutable after. The preamble occupies the whole of page 1
-(zero-padded past its 64 bytes), the first physical page in the file at
-offset 0 — page numbering is 1-based, page *n* begins at `(n - 1) *
-page_size`. Page 1 is the only reserved physical page; allocatable
-pages start at 2. Page id `0` is never a physical page at all — it has
-no file offset — so it stands as a pure null value for any
-page-id-typed field (the free-list terminator, and
-[0017](decisions/0017-wal-format.md)'s `PageDiff` base-page sentinel).
+Every self-describing page in `<prefix>.data.bin` — page 1, B+-tree
+nodes, free-list trunk pages — starts with the same 10-byte common
+header (`page_type: u8`, a reserved byte, and `page_lsn: u64` — the LSN
+of the write that last produced this page, `0` until a WAL exists to
+give it meaning), a single namespace shared across chunks: `2` = file
+header, `0`/`1` = B+-tree leaf/internal node
+([0016](decisions/0016-btree-node-format.md)), `3` = free-list trunk.
+Page 1 itself then starts with a fixed 64-byte preamble (the common
+header, magic bytes, format/version, page size, free-list trunk head),
+read before any page-sized I/O is possible; page size is chosen per
+database at creation and immutable after. The preamble occupies the
+whole of page 1 (zero-padded past its 64 bytes), the first physical
+page in the file at offset 0 — page numbering is 1-based, page *n*
+begins at `(n - 1) * page_size`. Page 1 is the only reserved physical
+page; allocatable pages start at 2. Page id `0` is never a physical
+page at all — it has no file offset — so it stands as a pure null value
+for any page-id-typed field (the free-list's `next_trunk` terminator,
+and [0017](decisions/0017-wal-format.md)'s `PageDiff` base-page
+sentinel). Free pages are tracked by trunk pages, each batching an
+array of free page ids; the free pages themselves carry no structure at
+all — only the (much smaller number of) trunk pages are self-describing.
 ([0015](decisions/0015-page-storage-format.md))
 
 Allocated pages hold a copy-on-write B+-tree: a slotted-page node
@@ -166,8 +176,10 @@ preamble like the data file's, then a sequence of checksummed records
 (LSN = a record's own file offset) — `PageDiff` (a base page plus
 changed byte ranges, redoing one newly-allocated page), `Commit` (the
 new root, durable once its record is fsynced), and `Checkpoint` (a
-dirty-page-table snapshot, fsyncing the data file behind it). Redo
-scans the whole log forward and stops cleanly at the first torn/corrupt
+dirty-page-table snapshot, fsyncing the data file behind it). Every
+`PageDiff` stamps the new page's `page_lsn` with its own LSN before
+diffing, so on-disk pages carry their own write provenance. Redo scans
+the whole log forward and stops cleanly at the first torn/corrupt
 record; the current root is whichever `Commit` was seen last.
 ([0017](decisions/0017-wal-format.md))
 

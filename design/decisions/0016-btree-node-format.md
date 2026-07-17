@@ -39,6 +39,15 @@ share the same header shape, slot-directory mechanics, and cell-region
 growth; they differ in what sits between the header and the slot
 directory, and in what a cell holds.
 
+The first 10 bytes of that header are
+[0015](0015-page-storage-format.md)'s common page header (`page_type` +
+reserved + `page_lsn`), not a node-specific field — `page_type = 0` is a
+leaf, `page_type = 1` is internal, in the same namespace as 0015's
+`page_type = 2` (file header) and `page_type = 3` (free-list trunk).
+This ADR calls the first of those bytes `node_type` below since "node"
+is the natural name at this layer, but it's the same byte (and the same
+following `page_lsn`) every page in the file starts with.
+
 All multi-byte fields little-endian, matching
 [0015](0015-page-storage-format.md)'s convention.
 
@@ -46,12 +55,13 @@ All multi-byte fields little-endian, matching
 
 | Offset | Length | Description |
 |---|---|---|
-| 0 | 1 | `node_type: u8` = 0 |
-| 1 | 1 | reserved |
-| 2 | 2 | `num_entries: u16` |
-| 4 | 2 | `free_start: u16` — end of the slot directory |
-| 6 | 2 | `free_end: u16` — start of the cell data region |
-| 8 | `num_entries * 4` | slot directory (see below) |
+| 0 | 1 | `node_type: u8` = 0 (common page header's `page_type`) |
+| 1 | 1 | reserved (common page header) |
+| 2 | 8 | `page_lsn: u64` (common page header) |
+| 10 | 2 | `num_entries: u16` |
+| 12 | 2 | `free_start: u16` — end of the slot directory |
+| 14 | 2 | `free_end: u16` — start of the cell data region |
+| 16 | `num_entries * 4` | slot directory (see below) |
 | `free_end` | (rest of page) | cell data region (see below) |
 
 Slot directory: `num_entries` fixed-size slots, kept sorted by key, each
@@ -75,18 +85,19 @@ Per-cell layout (offsets relative to the cell's own start):
 | `2 + key_len` | 2 | `value_len: u16` |
 | `4 + key_len` | `value_len` | value bytes |
 
-*Internal node*: same 8-byte header shape as a leaf (`node_type: u8` =
+*Internal node*: same 16-byte header shape as a leaf (`node_type: u8` =
 1), with an extra field before the slot directory:
 
 | Offset | Length | Description |
 |---|---|---|
-| 0 | 1 | `node_type: u8` = 1 |
-| 1 | 1 | reserved |
-| 2 | 2 | `num_entries: u16` |
-| 4 | 2 | `free_start: u16` — end of the slot directory |
-| 6 | 2 | `free_end: u16` — start of the cell data region |
-| 8 | 8 | `leftmost_child: PageId` (u64) |
-| 16 | `num_entries * 4` | slot directory — same shape and sort-by-key convention as a leaf's |
+| 0 | 1 | `node_type: u8` = 1 (common page header's `page_type`) |
+| 1 | 1 | reserved (common page header) |
+| 2 | 8 | `page_lsn: u64` (common page header) |
+| 10 | 2 | `num_entries: u16` |
+| 12 | 2 | `free_start: u16` — end of the slot directory |
+| 14 | 2 | `free_end: u16` — start of the cell data region |
+| 16 | 8 | `leftmost_child: PageId` (u64) |
+| 24 | `num_entries * 4` | slot directory — same shape and sort-by-key convention as a leaf's |
 | `free_end` | (rest of page) | cell data region — same downward-growth convention as a leaf's |
 
 An internal node with N separator keys has N+1 children; storing N+1
@@ -185,6 +196,12 @@ close/reopen).
   overhead) that the row store (chunk 5+) will have to either respect
   or design around (e.g. large-value overflow chains) — not solved
   here.
+- The header grew from 8 to 16 bytes (leaf) / 16 to 24 bytes (internal)
+  when [0015](0015-page-storage-format.md) added `page_lsn` to the
+  common page header every page shares; cell-region capacity per page
+  shrinks by the same 8 bytes. Negligible at any realistic page size,
+  and not a decision made in this ADR — just where 0015's change shows
+  up here.
 - Range-scan pruning depends on the tree actually being ordered
   correctly by the insert/split logic above; a bug there would silently
   under-return rather than error, which is why acceptance criteria

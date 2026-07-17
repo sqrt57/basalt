@@ -21,31 +21,37 @@ Roughly bottom-up; each chunk depends on the ones before it.
 
    Acceptance criteria:
    - Creating a new database at a path prefix produces
-     `<prefix>.data.bin` with a valid 64-byte preamble (magic, version,
-     page size, empty free-list head) occupying all of page-size-aligned
-     page 1 (the first physical page, at file offset 0) — the only
-     reserved page; page id 0 is a pure null value, never a physical
-     page.
+     `<prefix>.data.bin` with a valid 64-byte preamble (common page
+     header tagging it as the file-header type, magic, version, page
+     size, empty free-list trunk head) occupying all of
+     page-size-aligned page 1 (the first physical page, at file offset
+     0) — the only reserved page; page id 0 is a pure null value, never
+     a physical page.
    - Opening an existing file reads the preamble (fixed-size read,
      independent of page size), which validates magic/version and
-     restores page size and the free-list head in that same read.
+     restores page size and the free-list trunk head in that same read.
      Corrupt/unrecognized magic is a reported error.
    - Page size is a creation-time parameter, immutable thereafter;
      opening a file uses whatever page size is stored, never a
      caller-supplied override.
    - Close/reopen round-trips: allocate/write/free done before a clean
      close are visible in the same shape after reopen.
-   - `allocate_page()` reuses a free-listed page number if one exists,
-     otherwise extends the file by one page; `free_page(n)` pushes `n`
-     onto the free-list. Allocate N → free all N → allocate N again does
-     not grow the file further.
+   - `allocate_page()` reuses a free page id tracked by the current
+     trunk if one exists, otherwise extends the file by one page;
+     `free_page(n)` adds `n` to the current trunk (creating a new trunk
+     if none exists or the current one is full). Allocate N → free all N
+     → allocate N again does not grow the file further.
+   - Freeing more free-list entries than fit in one trunk's capacity
+     creates a second trunk, chained via `next_trunk`; allocating back
+     down through both trunks returns every freed page id exactly once.
    - `read_page(n)` / `write_page(n, buf)` operate on exactly one
      page-sized buffer each; no partial-page I/O in the API. Data
      written is returned byte-for-byte by a later read, same session and
      after a clean reopen.
    - Reading/writing beyond the allocated range is a reported error.
-     Reading a page currently on the free-list is defined-but-
-     unspecified content, not an error.
+     Reading a page currently tracked as a free leaf is
+     defined-but-unspecified content, not an error; a trunk page's own
+     content is well-defined and round-trips like any other page.
    - Explicit non-goals for this chunk: no crash safety across a crash
      (chunk 3), no concurrent access (chunk 4), no tree-structure
      interpretation of page contents (chunk 2+).

@@ -72,9 +72,9 @@ raised and set aside without a commitment either way.
   actually valid (power-of-two only? a floor/ceiling?) isn't decided.
   Doesn't block starting stage-1 chunk 1.
 - **Total page count storage** — derived from data-file length at open
-  time, or stored explicitly in page 1 alongside the free-list head
-  ([0015](decisions/0015-page-storage-format.md))? Not decided; doesn't
-  block starting stage-1 chunk 1.
+  time, or stored explicitly in page 1 alongside the free-list trunk
+  head ([0015](decisions/0015-page-storage-format.md))? Not decided;
+  doesn't block starting stage-1 chunk 1.
 - **Server's own config file location** — default path next to the
   executable, a CLI flag pointing at it, or something else. Not decided
   ([0012](decisions/0012-server-config.md)).
@@ -98,17 +98,28 @@ raised and set aside without a commitment either way.
   using the latest checkpoint's dirty-page table to start later needs a
   durable pointer to that checkpoint's own LSN somewhere recovery can
   find without itself scanning the whole log. Not designed yet.
+- **`page_lsn`-based redo skip** — every page now carries the LSN of the
+  write that last produced it ([0015](decisions/0015-page-storage-format.md)),
+  but redo doesn't read it back to decide anything
+  ([0017](decisions/0017-wal-format.md)): it unconditionally
+  reconstructs and rewrites every page a valid `PageDiff` names, even
+  one already durably reflecting that record or a later one. The
+  classic ARIES optimization — skip re-applying a record if the target
+  page's on-disk `page_lsn` already covers it — would avoid redundant
+  read+write work on a large post-crash replay. Not implemented; current
+  full-replay approach is already correct and idempotent without it.
 - **Automatic checkpoint triggering** — chunk 3 only checkpoints on an
   explicit call or clean close, no background size/timeout trigger
   ([0017](decisions/0017-wal-format.md)), since stage 1 has no
   background-task mechanism yet. Revisit once one exists.
 - **Free-list crash safety** — `Pager::free_page`/`allocate_page`
-  ([0015](decisions/0015-page-storage-format.md)) write the free-list
-  chain directly to the data file with no WAL logging and no fsync. A
-  torn write there (e.g. a partially-written next-pointer) could in
-  principle corrupt the chain and later hand out a still-live page as
-  "free," which is a correctness bug, not just a delayed reclaim. This
-  went mostly unexercised through chunks 1-3 (nothing on the normal
+  ([0015](decisions/0015-page-storage-format.md)) write trunk pages
+  directly to the data file with no WAL logging and no fsync. A torn
+  write there (e.g. a partially-written leaf-id array or `next_trunk`)
+  could in principle corrupt the trunk chain and later hand out a
+  still-live page as "free," which is a correctness bug, not just a
+  delayed reclaim. This went mostly unexercised through chunks 1-3
+  (nothing on the normal
   commit path called `free_page`); chunk 4's reclamation
   ([0018](decisions/0018-mvcc-snapshot-format.md)) is the first caller
   in the main flow. Deferred rather than fixed as part of chunk 4 — not
