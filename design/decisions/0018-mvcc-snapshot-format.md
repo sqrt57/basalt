@@ -81,28 +81,45 @@ reader, not a new category of risk.
   on it surviving a restart). Incremented by exactly 1 per successful
   `transaction` commit, regardless of how many tree operations that
   transaction performed.
-- **Reader table**: `BTreeMap<u64, u32>` (generation → count of open
-  snapshots pinned there), stored on `Database`. Low-water mark =
-  `reader_table.keys().next()`, or `current_generation` if the table is
-  empty (nothing pins anything older than the latest commit).
-- **`Snapshot`**: `{ generation: u64, root: Option<PageId> }`, `Copy`.
-  `Database::begin_read(&mut self) -> Snapshot` captures
-  `(current_generation, tree.as_ref().map(BTree::root))` and increments
-  its count in the reader table. `Database::end_read(&mut self, snap:
-  Snapshot)` decrements that count, removing the entry at 0. Reads
-  against a snapshot go through `Database` methods taking `&mut self,
-  &Snapshot` (`lookup_at`, `scan_all_at`, `range_at`), reconstructing a
-  `BTree::from_root` per call rather than holding one open.
+- **Reader table**: `BTreeMap<u64, u32>`, stored on `Database`. Low-water
+  mark = `reader_table.keys().next()`, or `current_generation` if the
+  table is empty (nothing pins anything older than the latest commit).
+
+  | Field | Type | Description |
+  |---|---|---|
+  | key | `u64` | a snapshot generation |
+  | value | `u32` | count of open snapshots currently pinned at that generation |
+- **`Snapshot`**: `Copy`, returned by `Database::begin_read(&mut self)
+  -> Snapshot`, which captures `(current_generation,
+  tree.as_ref().map(BTree::root))` and increments its count in the
+  reader table.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `generation` | `u64` | the generation this snapshot was taken at |
+  | `root` | `Option<PageId>` | tree root as of that generation, `None` for an empty database |
+
+  `Database::end_read(&mut self, snap: Snapshot)` decrements that count,
+  removing the entry at 0. Reads against a snapshot go through
+  `Database` methods taking `&mut self, &Snapshot` (`lookup_at`,
+  `scan_all_at`, `range_at`), reconstructing a `BTree::from_root` per
+  call rather than holding one open.
 - **Per-transaction superseded-page list**: `Database::transaction`
   collects every `base` passed to `write_new_node` during the closure
   (a `Vec<PageId>`, threaded through the same store wrapper that already
   carries the dirty-page table). On successful commit, `current_generation`
   is incremented and every collected page is appended to
-  `pending_reclaim: Vec<(PageId, u64)>` (page, generation it was
-  superseded at) tagged with the *new* generation. On abort (closure
-  returns `Err`), the collected list is simply dropped — those old pages
-  remain reachable from the unchanged current root, so they were never
-  actually superseded.
+  `pending_reclaim: Vec<(PageId, u64)>`, tagged with the *new*
+  generation:
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `.0` | `PageId` | a page superseded by this transaction's commit |
+  | `.1` | `u64` | the generation it was superseded at (the new `current_generation`) |
+
+  On abort (closure returns `Err`), the collected list is simply
+  dropped — those old pages remain reachable from the unchanged current
+  root, so they were never actually superseded.
 - **Reclaim trigger**: `Database::checkpoint` (already the reclaim
   trigger per [0013](0013-page-reclamation.md)) computes the low-water
   mark, then partitions `pending_reclaim`: every entry with

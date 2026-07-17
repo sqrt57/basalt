@@ -39,36 +39,67 @@ share the same header shape, slot-directory mechanics, and cell-region
 growth; they differ in what sits between the header and the slot
 directory, and in what a cell holds.
 
+All multi-byte fields little-endian, matching
+[0015](0015-page-storage-format.md)'s convention.
+
 *Leaf node*:
 
-- 8-byte header at offset 0: `node_type: u8` = 0, 1 reserved byte,
-  `num_entries: u16`, `free_start: u16` (end of the slot directory),
-  `free_end: u16` (start of the cell data region) — all multi-byte
-  fields little-endian, matching [0015](0015-page-storage-format.md)'s
-  convention.
-- Slot directory immediately follows the header, at offset 8:
-  `num_entries` fixed-size 4-byte slots (`offset: u16`, `length: u16`),
-  kept sorted by key, each pointing at a cell in the data region.
-- Cell data region grows downward from the end of the page as cells are
-  appended; `free_end` tracks its current start. The node is full when
-  `free_end - free_start` can't fit a new cell plus its 4-byte slot.
-- Cell: `key_len: u16`, key bytes, `value_len: u16`, value bytes.
+| Offset | Length | Description |
+|---|---|---|
+| 0 | 1 | `node_type: u8` = 0 |
+| 1 | 1 | reserved |
+| 2 | 2 | `num_entries: u16` |
+| 4 | 2 | `free_start: u16` — end of the slot directory |
+| 6 | 2 | `free_end: u16` — start of the cell data region |
+| 8 | `num_entries * 4` | slot directory (see below) |
+| `free_end` | (rest of page) | cell data region (see below) |
 
-*Internal node*:
+Slot directory: `num_entries` fixed-size slots, kept sorted by key, each
+pointing at a cell in the data region. Per-slot layout (offsets relative
+to the slot's own start):
 
-- Same 8-byte header shape as a leaf, at offset 0, with `node_type: u8`
-  = 1.
-- An extra 8-byte `leftmost_child: PageId` field immediately after the
-  header, at offset 8..16. An internal node with N separator keys has
-  N+1 children; storing N+1 pointers against N slots needs one pointer
-  outside the slot array, so the leftmost child is pulled into the
-  header and every slot's cell carries the child *to its right*.
-- Slot directory follows at offset 16 (after `leftmost_child`): same
-  4-byte slot shape and sort-by-key convention as a leaf's.
-- Cell data region: same downward-growth convention as a leaf's.
-- Cell: `key_len: u16`, key bytes, `child: PageId` (u64) — the subtree
-  for keys in `[this key, next slot's key)`, or `[this key, +inf)` for
-  the last slot.
+| Offset | Length | Description |
+|---|---|---|
+| 0 | 2 | `offset: u16` — cell's byte offset within the page |
+| 2 | 2 | `length: u16` — cell's length in bytes |
+
+Cell data region grows downward from the end of the page as cells are
+appended; `free_end` tracks its current start. The node is full when
+`free_end - free_start` can't fit a new cell plus its 4-byte slot.
+Per-cell layout (offsets relative to the cell's own start):
+
+| Offset | Length | Description |
+|---|---|---|
+| 0 | 2 | `key_len: u16` |
+| 2 | `key_len` | key bytes |
+| `2 + key_len` | 2 | `value_len: u16` |
+| `4 + key_len` | `value_len` | value bytes |
+
+*Internal node*: same 8-byte header shape as a leaf (`node_type: u8` =
+1), with an extra field before the slot directory:
+
+| Offset | Length | Description |
+|---|---|---|
+| 0 | 1 | `node_type: u8` = 1 |
+| 1 | 1 | reserved |
+| 2 | 2 | `num_entries: u16` |
+| 4 | 2 | `free_start: u16` — end of the slot directory |
+| 6 | 2 | `free_end: u16` — start of the cell data region |
+| 8 | 8 | `leftmost_child: PageId` (u64) |
+| 16 | `num_entries * 4` | slot directory — same shape and sort-by-key convention as a leaf's |
+| `free_end` | (rest of page) | cell data region — same downward-growth convention as a leaf's |
+
+An internal node with N separator keys has N+1 children; storing N+1
+pointers against N slots needs one pointer outside the slot array, so
+the leftmost child is pulled into the header and every slot's cell
+carries the child *to its right*. Per-cell layout (offsets relative to
+the cell's own start):
+
+| Offset | Length | Description |
+|---|---|---|
+| 0 | 2 | `key_len: u16` |
+| 2 | `key_len` | key bytes |
+| `2 + key_len` | 8 | `child: PageId` (u64) — the subtree for keys in `[this key, next slot's key)`, or `[this key, +inf)` for the last slot |
 
 Both node types share two further properties:
 
@@ -89,7 +120,7 @@ chunk 4; this chunk has no reader table to know when it's safe). The
 new child page id is threaded up through every ancestor on the path,
 each of which is itself copied to a new page for the same reason,
 terminating in a new root. The tree handle holding `root: PageId` is
-**in-memory only** for this chunk — nothing writes it to page 0 or
+**in-memory only** for this chunk — nothing writes it to page 1 or
 anywhere else durable; that's chunk 3/4's concern (WAL, then MVCC root
 history). A process restart loses track of the root unless the caller
 remembered the `PageId` itself, even though the pages it points to are

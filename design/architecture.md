@@ -139,14 +139,17 @@ WAL). No directory convention, no per-engine file.
 ([0011](decisions/0011-embedded-config.md))
 
 `<prefix>.data.bin` itself starts with a fixed 64-byte preamble (magic
-bytes, format/version, page size), read before any page-sized I/O is
-possible; page size is chosen per database at creation and immutable
-after. The preamble occupies the whole of page 0 (zero-padded past its
-64 bytes), keeping every page in the file aligned to a `page_size`
-multiple from offset 0 — page *n* begins at `n * page_size`, no separate
-preamble offset term. Page 1 immediately follows and holds the
-free-list head; free pages are threaded into a singly-linked list among
-themselves. ([0015](decisions/0015-page-storage-format.md))
+bytes, format/version, page size, free-list head), read before any
+page-sized I/O is possible; page size is chosen per database at
+creation and immutable after. The preamble occupies the whole of page 1
+(zero-padded past its 64 bytes), the first physical page in the file at
+offset 0 — page numbering is 1-based, page *n* begins at `(n - 1) *
+page_size`. Page 1 is the only reserved physical page; allocatable
+pages start at 2. Page id `0` is never a physical page at all — it has
+no file offset — so it stands as a pure null value for any
+page-id-typed field (the free-list terminator, and
+[0017](decisions/0017-wal-format.md)'s `PageDiff` base-page sentinel).
+([0015](decisions/0015-page-storage-format.md))
 
 Allocated pages hold a copy-on-write B+-tree: a slotted-page node
 format (byte-string keys/values, no fixed fanout, no overflow pages),

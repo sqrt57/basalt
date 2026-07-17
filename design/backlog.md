@@ -72,7 +72,7 @@ raised and set aside without a commitment either way.
   actually valid (power-of-two only? a floor/ceiling?) isn't decided.
   Doesn't block starting stage-1 chunk 1.
 - **Total page count storage** — derived from data-file length at open
-  time, or stored explicitly in page 0 alongside the free-list head
+  time, or stored explicitly in page 1 alongside the free-list head
   ([0015](decisions/0015-page-storage-format.md))? Not decided; doesn't
   block starting stage-1 chunk 1.
 - **Server's own config file location** — default path next to the

@@ -41,11 +41,17 @@ here.
 ## Decision
 
 **Log file & preamble**: `<prefix>.log.bin` starts with a fixed 64-byte
-preamble, mirroring [0015](0015-page-storage-format.md)'s convention:
-magic bytes `b"BSLTLOG_"` (8 bytes), `format_version: u32` (little-
-endian), the rest reserved/zeroed. No page size field — diff records are
-self-describing and don't need it. Records begin immediately after, at
-offset 64.
+preamble, mirroring [0015](0015-page-storage-format.md)'s convention.
+No page size field — diff records are self-describing and don't need
+it. All multi-byte fields little-endian.
+
+| Offset | Length | Description |
+|---|---|---|
+| 0 | 8 | magic bytes `b"BSLTLOG_"` |
+| 8 | 4 | `format_version: u32` |
+| 12 | 52 | reserved (zeroed) |
+
+Records begin immediately after, at offset 64.
 
 **LSN = log byte offset**: an LSN is the file offset (`u64`) of a
 record's own header, not a separate counter. `recLSN` in the
@@ -53,17 +59,20 @@ dirty-page table reuses this same value. This needs no counter state
 to persist or recover — the position to resume appending at *is* the
 next free LSN.
 
-**Record framing**:
+**Record framing** (offsets relative to the record's own start):
 
-- header: `payload_len: u32` (LE), `record_type: u8`
-- payload: exactly `payload_len` bytes
-- trailer: `checksum: u32` (LE) — CRC-32C (Castagnoli) over the
-  `record_type` byte followed by the payload bytes. Castagnoli over the
-  classic IEEE polynomial: better error detection at the record lengths
-  a WAL actually sees, and hardware-accelerated on both platforms this
-  project targets (x86_64 SSE4.2 `crc32`, ARMv8 CRC32C) — the same
-  choice Postgres, RocksDB/LevelDB, btrfs, ext4, and iSCSI made for the
-  same reason.
+| Offset | Length | Description |
+|---|---|---|
+| 0 | 4 | `payload_len: u32` (LE) |
+| 4 | 1 | `record_type: u8` |
+| 5 | `payload_len` | payload bytes |
+| `5 + payload_len` | 4 | `checksum: u32` (LE) — CRC-32C (Castagnoli) over the `record_type` byte followed by the payload bytes |
+
+Castagnoli over the classic IEEE polynomial: better error detection at
+the record lengths a WAL actually sees, and hardware-accelerated on
+both platforms this project targets (x86_64 SSE4.2 `crc32`, ARMv8
+CRC32C) — the same choice Postgres, RocksDB/LevelDB, btrfs, ext4, and
+iSCSI made for the same reason.
 
 Recovery reads records sequentially from offset 64. If the header can't
 be fully read, or the payload+trailer can't be fully read, or the
@@ -75,32 +84,63 @@ tail can therefore only contain work that was never acknowledged.
 
 **Record types**:
 
-- `PageDiff = 0` — payload: `new_page_id: u64`, `base_page_id: u64`
-  (sentinel `u64::MAX`, matching `pager.rs`'s existing
-  `FREE_LIST_NONE` convention, meaning "no base — reconstruct from an
-  all-zero page"), `num_ranges: u16`, then `num_ranges` entries of
-  (`offset: u16`, `len: u16`, `bytes: [u8; len]`). Redo: start from the
-  base page's current on-disk content (or a zeroed `page_size`-byte
-  buffer if the sentinel), overwrite each range in listed order, write
-  the result to `new_page_id` — extending the data file first if
-  `new_page_id` is beyond its currently-allocated range (see
-  Consequences).
-- `Commit = 1` — payload: `root_page_id: u64`. Marks every `PageDiff`
-  since the previous `Commit`/`Checkpoint` as belonging to a completed
-  transaction and gives recovery the new current root. A transaction is
-  durable once its `Commit` record — and everything before it — is
-  fsynced; the write path fsyncs the log up to and including this
-  record before returning success to the caller.
-- `Checkpoint = 2` — payload: `num_entries: u16`, then `num_entries`
-  entries of (`page_id: u64`, `rec_lsn: u64`): a snapshot of the
-  dirty-page table (pages `write_page` has touched since they were last
-  made durable, each tagged with the LSN of the `PageDiff` that first
-  dirtied it). Taking a checkpoint: snapshot the DPT, write it as this
-  record, fsync the data file, then drop from the in-memory DPT every
-  entry whose page is now covered by that fsync. Chunk 3 triggers a
-  checkpoint only explicitly (a caller-invoked method) and always on
-  clean close — no background size/timeout trigger, since stage 1 has
-  no background-task mechanism to run one on yet (see Consequences).
+- `PageDiff = 0` — payload:
+
+  | Offset | Length | Description |
+  |---|---|---|
+  | 0 | 8 | `new_page_id: u64` |
+  | 8 | 8 | `base_page_id: u64` — sentinel `0`, matching [0015](0015-page-storage-format.md)'s page-id-`0`-is-null convention (page id 0 is never a physical page at all, so it can never collide with a real base page), meaning "no base — reconstruct from an all-zero page" |
+  | 16 | 2 | `num_ranges: u16` |
+  | 18 | varies | `num_ranges` range entries (see below) |
+
+  Each range entry:
+
+  | Offset | Length | Description |
+  |---|---|---|
+  | 0 | 2 | `offset: u16` |
+  | 2 | 2 | `len: u16` |
+  | 4 | `len` | `bytes: [u8; len]` |
+
+  Redo: start from the base page's current on-disk content (or a zeroed
+  `page_size`-byte buffer if the sentinel), overwrite each range in
+  listed order, write the result to `new_page_id` — extending the data
+  file first if `new_page_id` is beyond its currently-allocated range
+  (see Consequences).
+- `Commit = 1` — payload:
+
+  | Offset | Length | Description |
+  |---|---|---|
+  | 0 | 8 | `root_page_id: u64` |
+
+  Marks every `PageDiff` since the previous `Commit`/`Checkpoint` as
+  belonging to a completed transaction and gives recovery the new
+  current root. A transaction is durable once its `Commit` record —
+  and everything before it — is fsynced; the write path fsyncs the log
+  up to and including this record before returning success to the
+  caller.
+- `Checkpoint = 2` — payload:
+
+  | Offset | Length | Description |
+  |---|---|---|
+  | 0 | 2 | `num_entries: u16` |
+  | 2 | varies | `num_entries` dirty-page-table entries (see below) |
+
+  Each DPT entry:
+
+  | Offset | Length | Description |
+  |---|---|---|
+  | 0 | 8 | `page_id: u64` |
+  | 8 | 8 | `rec_lsn: u64` |
+
+  A snapshot of the dirty-page table (pages `write_page` has touched
+  since they were last made durable, each tagged with the LSN of the
+  `PageDiff` that first dirtied it). Taking a checkpoint: snapshot the
+  DPT, write it as this record, fsync the data file, then drop from the
+  in-memory DPT every entry whose page is now covered by that fsync.
+  Chunk 3 triggers a checkpoint only explicitly (a caller-invoked
+  method) and always on clean close — no background size/timeout
+  trigger, since stage 1 has no background-task mechanism to run one on
+  yet (see Consequences).
 
 **Diff computation**: the format supports multiple changed ranges per
 page, but chunk 3's first algorithm computes at most one — trim the
@@ -154,7 +194,7 @@ once the following checkpoint's fsync catches up to them.
   timeout-based) in chunk 3, only explicit-call and on-close — revisit
   once a background-task mechanism exists elsewhere in the engine.
   Left open (see [backlog.md](../backlog.md)).
-- [0015](0015-page-storage-format.md)'s data-file preamble/page-0
+- [0015](0015-page-storage-format.md)'s data-file preamble/page-1
   format is untouched by this ADR: chunk 3 never persists the root
   anywhere in the data file, only in the log, via `Commit` records.
   Durable root *history* (multiple generations, as opposed to one
